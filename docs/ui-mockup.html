@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>家庭点菜 · UI 风格示意图</title>
+<style>
+  :root{
+    --bg:#FAF6F0; --card:#FFFFFF; --ink:#3B342E; --ink2:#8A8077;
+    --green:#5B8C5A; --green-deep:#4F7A4E; --tomato:#D96A3B; --danger:#C94F3D;
+    --line:#EFE7DC;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-font-smoothing:antialiased;}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
+    background: #f0e9df; color:var(--ink); padding:40px 16px;
+  }
+  .page-title{text-align:center; margin-bottom:6px; font-size:24px; font-weight:700; letter-spacing:1px;}
+  .page-sub{text-align:center; color:var(--ink2); margin-bottom:32px; font-size:14px;}
+  .board{display:flex; gap:28px; flex-wrap:wrap; justify-content:center; align-items:flex-start;}
+  .phone-label{text-align:center; font-size:13px; color:var(--ink2); margin-bottom:10px; font-weight:600;}
+  .phone{
+    width:320px; min-height:640px; background:var(--bg); border-radius:36px;
+    box-shadow:0 18px 50px rgba(60,44,32,.18), 0 0 0 10px #fff, 0 0 0 12px #e2d8c9;
+    overflow:hidden; position:relative; display:flex; flex-direction:column;
+  }
+  .statusbar{display:flex; justify-content:space-between; padding:12px 20px 4px; font-size:12px; color:var(--ink2);}
+  .head{padding:18px 20px 10px;}
+  .head .hello{font-size:13px; color:var(--ink2);}
+  .head h2{font-size:24px; font-weight:800; margin-top:2px; letter-spacing:.5px;}
+  .hero-card{
+    margin:4px 16px 12px; background:linear-gradient(135deg,#5B8C5A,#72A06D); color:#fff;
+    border-radius:18px; padding:18px; box-shadow:0 10px 24px rgba(91,140,90,.28);
+  }
+  .hero-card .tag{background:rgba(255,255,255,.22); display:inline-block; border-radius:999px; padding:2px 10px; font-size:11px;}
+  .hero-card h3{font-size:21px; margin:8px 0 4px; font-weight:800;}
+  .hero-card p{font-size:13px; opacity:.92;}
+  .hero-actions{display:flex; gap:10px; margin-top:14px;}
+  .btn{flex:1; text-align:center; border-radius:12px; padding:11px 0; font-size:14px; font-weight:700; border:none;}
+  .btn-light{background:#fff; color:var(--green-deep);}
+  .btn-ghost{background:rgba(255,255,255,.18); color:#fff;}
+  .section-head{display:flex; justify-content:space-between; align-items:center; padding:10px 20px 8px;}
+  .section-head h4{font-size:15px; font-weight:800;}
+  .section-head span{font-size:12px; color:var(--tomato); font-weight:600;}
+  .list{padding:0 16px;}
+  .row{
+    background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px;
+    display:flex; align-items:center; gap:12px; margin-bottom:10px; box-shadow:0 3px 10px rgba(60,44,32,.05);
+  }
+  .emoji{width:42px; height:42px; background:#F4EDE2; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:22px;}
+  .row .body{flex:1; min-width:0;}
+  .row .title{font-size:15px; font-weight:700;}
+  .row .meta{font-size:12px; color:var(--ink2); margin-top:2px;}
+  .pill{font-size:11px; padding:3px 9px; border-radius:999px; font-weight:700;}
+  .pill.green{background:#EAF2E7; color:var(--green-deep);}
+  .pill.red{background:#FBEAE5; color:var(--danger);}
+  .fab{
+    position:absolute; right:18px; bottom:20px; width:56px; height:56px; border-radius:50%;
+    background:var(--tomato); color:#fff; font-size:30px; line-height:52px; text-align:center;
+    box-shadow:0 10px 22px rgba(217,106,59,.4);
+  }
+  .tabs{
+    margin-top:auto; border-top:1px solid var(--line); background:#FFFDF9; display:flex; padding:8px 6px 12px;
+  }
+  .tab{flex:1; text-align:center; font-size:11px; color:var(--ink2);}
+  .tab .ic{font-size:20px; display:block; margin-bottom:2px;}
+  .tab.on{color:var(--green-deep); font-weight:700;}
+  .chipbar{display:flex; gap:8px; padding:4px 16px 10px; overflow:hidden;}
+  .chip{background:#fff; border:1px solid var(--line); border-radius:999px; padding:6px 13px; font-size:13px; white-space:nowrap;}
+  .chip.on{background:var(--green); border-color:var(--green); color:#fff; font-weight:700;}
+  .prep-summary{display:flex; gap:10px; padding:4px 16px 10px;}
+  .stat{flex:1; background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px; text-align:center;}
+  .stat b{display:block; font-size:20px;}
+  .stat.good b{color:var(--green);}
+  .stat.warn b{color:var(--danger);}
+  .stat span{font-size:11px; color:var(--ink2);}
+  .toggle{width:46px; height:28px; border-radius:999px; background:#E5DCCD; position:relative; flex-shrink:0;}
+  .toggle::after{content:""; position:absolute; width:22px; height:22px; border-radius:50%; background:#fff; top:3px; left:3px; box-shadow:0 1px 3px rgba(0,0,0,.2);}
+  .toggle.on{background:var(--green);}
+  .toggle.on::after{left:21px;}
+  .paste-box{
+    margin:2px 16px 10px; background:#fff; border:1px dashed var(--tomato); border-radius:16px; padding:14px;
+  }
+  .paste-box textarea{width:100%; border:none; resize:none; font-size:16px; font-family:inherit; color:var(--ink); outline:none; line-height:1.5; height:76px;}
+  .paste-box .hint{font-size:11px; color:var(--ink2); margin-top:6px;}
+  .parse-preview{background:#FFFDF9; border:1px solid var(--line); border-radius:14px; margin:0 16px 10px; padding:12px;}
+  .parse-preview .pt{font-size:11px; color:var(--ink2); margin-bottom:6px; font-weight:700;}
+  .parse-item{display:flex; justify-content:space-between; font-size:14px; padding:5px 0; border-bottom:1px dashed var(--line);}
+  .parse-item:last-child{border-bottom:none;}
+  .parse-item .qty{color:var(--green-deep); font-weight:800;}
+  .primary-btn{margin:0 16px 12px; background:var(--green); color:#fff; border:none; border-radius:14px; padding:14px; font-size:15px; font-weight:800; width:calc(100% - 32px); box-shadow:0 8px 18px rgba(91,140,90,.25);}
+  .legend{max-width:1000px; margin:36px auto 0; display:flex; gap:12px; flex-wrap:wrap; justify-content:center;}
+  .legend .sw{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink2);}
+  .dot{width:16px; height:16px; border-radius:5px; display:inline-block;}
+</style>
+</head>
+<body>
+  <div class="page-title">家庭点菜 · 手写菜单风</div>
+  <div class="page-sub">主色橄榄绿 · 强调番茄红 · 奶油纸底 · 大按钮大字号</div>
+
+  <div class="board">
+
+    <!-- 屏 1：今天吃啥 -->
+    <div>
+      <div class="phone-label">屏 1 · 今天吃啥</div>
+      <div class="phone">
+        <div class="statusbar"><span>9:41</span><span>🔋 ▮▮▮</span></div>
+        <div class="head">
+          <div class="hello">傍晚好，今晚想吃什么？</div>
+          <h2>今天吃啥</h2>
+        </div>
+        <div class="hero-card">
+          <span class="tag">🔥 进行中</span>
+          <h3>今晚这顿饭</h3>
+          <p>已点 4 道 · 2 人参与 · 还差 1 样没备齐</p>
+          <div class="hero-actions">
+            <div class="btn btn-light">＋ 加一道菜</div>
+            <div class="btn btn-ghost">看备菜清单 →</div>
+          </div>
+        </div>
+        <div class="section-head"><h4>最近吃过的</h4><span>查看月历 ›</span></div>
+        <div class="list">
+          <div class="row"><div class="emoji">🍲</div><div class="body"><div class="title">红烧肉 · 番茄炒蛋</div><div class="meta">昨天 · 2 道菜</div></div></div>
+          <div class="row"><div class="emoji">🥟</div><div class="body"><div class="title">白菜猪肉饺子</div><div class="meta">周三 · 1 道菜 · 「皮薄很香」</div></div></div>
+        </div>
+        <div class="fab">＋</div>
+        <div class="tabs">
+          <div class="tab on"><span class="ic">🍽️</span>今天吃啥</div>
+          <div class="tab"><span class="ic">📖</span>菜谱</div>
+          <div class="tab"><span class="ic">🥫</span>库存</div>
+          <div class="tab"><span class="ic">🗓️</span>日志</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 屏 2：备菜清单 -->
+    <div>
+      <div class="phone-label">屏 2 · 备菜清单</div>
+      <div class="phone">
+        <div class="statusbar"><span>9:41</span><span>🔋 ▮▮▮</span></div>
+        <div class="head">
+          <div class="hello">备菜对照库存 · 只勾状态不扣库存</div>
+          <h2>今晚这顿饭</h2>
+        </div>
+        <div class="prep-summary">
+          <div class="stat"><b>8</b><span>已备齐</span></div>
+          <div class="stat good"><b>6</b><span>库存够</span></div>
+          <div class="stat warn"><b>2</b><span>还缺</span></div>
+        </div>
+        <div class="section-head"><h4>缺的食材</h4><span>先补这 2 样</span></div>
+        <div class="list">
+          <div class="row">
+            <div class="emoji">🧅</div><div class="body"><div class="title">葱</div><div class="meta">需 6 根 · 库存 0 根 · <span style="color:var(--danger);font-weight:700;">缺 6 根</span></div></div>
+            <span class="pill red">缺</span>
+          </div>
+          <div class="row">
+            <div class="emoji">🍶</div><div class="body"><div class="title">生抽</div><div class="meta">需 1 瓶 · 库存 0.3 瓶 · <span style="color:var(--danger);font-weight:700;">缺 0.7 瓶</span></div></div>
+            <span class="pill red">缺</span>
+          </div>
+        </div>
+        <div class="section-head"><h4>已备齐 / 库存够</h4></div>
+        <div class="list">
+          <div class="row">
+            <div class="emoji">🍅</div><div class="body"><div class="title">番茄</div><div class="meta">需 3 个 · 库存 4 个 · 够用</div></div>
+            <div class="toggle on"></div>
+          </div>
+          <div class="row">
+            <div class="emoji">🥚</div><div class="body"><div class="title">鸡蛋</div><div class="meta">需 4 个 · 库存 12 个 · 够用</div></div>
+            <div class="toggle on"></div>
+          </div>
+          <div class="row">
+            <div class="emoji">🥒</div><div class="body"><div class="title">黄瓜</div><div class="meta">需 1 根 · 库存 2 根 · 够用</div></div>
+            <div class="toggle"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 屏 3：库存粘贴录入 -->
+    <div>
+      <div class="phone-label">屏 3 · 库存粘贴录入</div>
+      <div class="phone">
+        <div class="statusbar"><span>9:41</span><span>🔋 ▮▮▮</span></div>
+        <div class="head">
+          <div class="hello">冰箱里有什么？整段粘进来</div>
+          <h2>库存</h2>
+        </div>
+        <div class="chipbar">
+          <div class="chip on">全部</div><div class="chip">蔬菜</div><div class="chip">调料</div><div class="chip">肉蛋</div>
+        </div>
+        <div class="paste-box">
+          <textarea>芹菜一斤，酱油一瓶、鸡蛋十个</textarea>
+          <div class="hint">用逗号、顿号或换行分隔，自动识别名称 + 数量 + 单位</div>
+        </div>
+        <button class="primary-btn">解析并预览</button>
+        <div class="parse-preview">
+          <div class="pt">识别出 3 条（确认后才会入库）</div>
+          <div class="parse-item"><span>芹菜</span><span class="qty">1 斤</span></div>
+          <div class="parse-item"><span>酱油</span><span class="qty">1 瓶</span></div>
+          <div class="parse-item"><span>鸡蛋</span><span class="qty">10 个</span></div>
+        </div>
+        <button class="primary-btn" style="background:var(--tomato);box-shadow:0 8px 18px rgba(217,106,59,.25);">确认入库</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="legend">
+    <div class="sw"><span class="dot" style="background:#5B8C5A"></span>主色 橄榄绿 #5B8C5A</div>
+    <div class="sw"><span class="dot" style="background:#D96A3B"></span>强调 番茄红 #D96A3B</div>
+    <div class="sw"><span class="dot" style="background:#FAF6F0"></span>底色 奶油纸 #FAF6F0</div>
+    <div class="sw"><span class="dot" style="background:#3B342E"></span>文字 深棕 #3B342E</div>
+    <div class="sw"><span class="dot" style="background:#C94F3D"></span>缺货 警示红 #C94F3D</div>
+  </div>
+</body>
+</html>
