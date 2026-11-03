@@ -4,3 +4,6 @@ data/*.db-shm
 data/*.db-wal
 backups/
 .DS_Store
+*.log
+*.err.log
+patch_front.js
