@@ -138,6 +138,14 @@ export function togglePrep({ meal_id, entry_id, prepared }) {
   return listPrep(meal_id);
 }
 
+export function deleteMeal(mealId) {
+  const meal = repo.getMeal(mealId);
+  if (!meal) throw new Error('这顿饭不存在');
+  // 日志等关联记录由外键级联删除（meal_log ON DELETE CASCADE）。
+  const changes = repo.deleteMeal(mealId);
+  return { deleted: changes > 0, meal_id: mealId };
+}
+
 export function closeMeal(mealId) {
   const meal = repo.getMeal(mealId);
   if (!meal) throw new Error('这顿饭不存在');
@@ -194,3 +202,4 @@ export function calendarMonth(year, month) {
 function dbAll(sql, ...args) {
   return repo.db().prepare(sql).all(...args);
 }
+

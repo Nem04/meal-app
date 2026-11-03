@@ -39,6 +39,14 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+function localDateStr(d) {
+  const x = d || new Date();
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, "0");
+  const day = String(x.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function openSheet(html) {
   sheetEl.innerHTML = html;
   sheetEl.hidden = false;
@@ -92,7 +100,7 @@ async function renderToday() {
 
   const closedHtml = closed.length
     ? closed.slice(0, 8).map((m) => `
-      <div class="row"><div class="emoji">🍲</div><div class="body"><div class="title">${esc(m.title)}</div><div class="meta">${esc(m.meal_date)} · ${m.item_count} 道菜</div></div></div>`).join('')
+      <div class="row"><div class="emoji">🍲</div><div class="body"><div class="title">${esc(m.title)}</div><div class="meta">${esc(m.meal_date)} · ${m.item_count} 道菜</div></div><button class="mini-btn plain" onclick="confirmDeleteMeal('${m.id}','${esc(m.title)}')">删除</button></div>`).join('')
     : `<div class="empty">还没有吃过记录</div>`;
 
   document.getElementById('today-body').innerHTML = hero + `<div class="section-head"><h4>最近吃过的</h4><span onclick="render('log')">查看月历 ›</span></div>` + closedHtml;
@@ -112,7 +120,7 @@ window.openMealForm = function() {
   openSheet(`
     <h3>开一顿饭 <button class="close-x" onclick="closeSheet()">×</button></h3>
     <input class="input" id="meal-title" placeholder="饭名，默认「今晚这顿饭」">
-    <input class="input" id="meal-date" type="date" value="${new Date().toISOString().slice(0,10)}">
+    <input class="input" id="meal-date" type="date" value="${localDateStr()}">
     <input class="input" id="meal-by" placeholder="主厨昵称（可选）">
     <button class="primary-btn" onclick="doOpenMeal()">开饭</button>
   `);
@@ -175,6 +183,23 @@ async function mealDetailHtml(meal, id) {
 window.doCloseMeal = async function(id) {
   await api(`/meals/${id}/close`, 'PATCH', {});
   toast('这顿饭结束了 ✅');
+  closeSheet();
+  render('today');
+};
+window.confirmDeleteMeal = function(id, title) {
+  const safeTitle = esc(title || '');
+  openSheet(`
+    <h3>删除这顿饭<button class="close-x" onclick="closeSheet()">×</button></h3>
+    <p class="muted">确定删除「${safeTitle}」吗？</p>
+    <p class="muted" style="margin-bottom:12px">删除后，这顿饭、点菜记录、备菜条目和日志会一起删掉，无法恢复。</p>
+    <button class="primary-btn" style="background:var(--danger)" onclick="doDeleteMeal('${id}')">删除</button>
+    <button class="secondary-btn" onclick="closeSheet()">取消</button>
+  `);
+};
+
+window.doDeleteMeal = async function(id) {
+  await api(`/meals/${id}`, 'DELETE', {});
+  toast('已删除这顿饭 🗑');
   closeSheet();
   render('today');
 };
@@ -419,7 +444,8 @@ async function renderLog() {
 }
 
 async function refreshLog() {
-  const { year, month } = state;
+  const year = state.calendarYear;
+  const month = state.calendarMonth;
   const res = await api(`/calendar?year=${year}&month=${month}`);
   const days = res.days || [];
   const byDay = new Map();
@@ -430,7 +456,7 @@ async function refreshLog() {
   const daysInMonth = new Date(year, month, 0).getDate();
   const cells = [];
   for (let i = 0; i < dow; i += 1) cells.push(`<div class="cal-cell other"></div>`);
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr();
   for (let d = 1; d <= daysInMonth; d += 1) {
     const ds = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const meal = byDay.get(ds);

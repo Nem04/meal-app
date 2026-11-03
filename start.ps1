@@ -1,5 +1,33 @@
-# 家庭点菜启动脚本（Windows PowerShell）
-Set-Location $PSScriptRoot\backend
+# 家庭点菜启动脚本（双击「家庭点菜」快捷方式即可）
+$ErrorActionPreference = 'Stop'
+
+$root = Split-Path -Parent $MyInvocation.MyCommand.Path
+Set-Location (Join-Path $root 'backend')
+
+# 自动寻找 Node.js（兼容常见安装位置）
+$nodeCandidates = @(
+  (Get-Command node -ErrorAction SilentlyContinue).Source,
+  'C:\Program Files\nodejs\node.exe',
+  'C:\Program Files (x86)\nodejs\node.exe',
+  "$env:LOCALAPPDATA\Programs\nodejs\node.exe",
+  "$env:APPDATA\npm\node.exe"
+)
+
+$node = $null
+foreach ($cand in $nodeCandidates) {
+  if ($cand -and (Test-Path -LiteralPath $cand)) { $node = $cand; break }
+}
+
+if (-not $node) {
+  Write-Host ''
+  Write-Host '没有找到 Node.js。' -ForegroundColor Yellow
+  Write-Host '请先安装 Node.js 22 或更新版本：https://nodejs.org/zh-cn/download' -ForegroundColor Yellow
+  Write-Host ''
+  Read-Host '按回车退出'
+  exit 1
+}
+
 if (-not $env:PORT) { $env:PORT = '8080' }
-Write-Host "家庭点菜启动，端口 $env:PORT ..."
-node src\server.js
+
+Write-Host '正在启动家庭点菜...' -ForegroundColor Green
+& $node 'src\server.js'

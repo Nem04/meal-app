@@ -114,6 +114,12 @@ export function updateMealStatus(id, status) {
   db().prepare('UPDATE meal SET status = ?, closed_at = ? WHERE id = ?').run(status, t, id);
 }
 
+export function deleteMeal(id) {
+  // 外键 ON DELETE CASCADE 已覆盖 meal_item / meal_prep_entry / meal_log。
+  const r = db().prepare('DELETE FROM meal WHERE id = ?').run(id);
+  return r.changes;
+}
+
 export function upsertMealItem(mealId, versionId, submitter, quantity, note) {
   const d = db();
   const t = new Date().toISOString();
@@ -246,3 +252,4 @@ export function mealsForMonth(year, month) {
 }
 
 function roundQty(n) { return Math.round(n * 100) / 100; }
+

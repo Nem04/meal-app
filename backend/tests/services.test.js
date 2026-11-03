@@ -67,8 +67,27 @@ test('红线T3：同饭同菜重复点菜不新增行', () => {
   assert.equal(items[0].note, '加辣');
 });
 
+test('删除饭局后，日志记录也级联删除', () => {
+  const meal = svc.openMeal({ title: '今晚', meal_date: '2026-11-03' });
+  const mealId = meal.id;
+
+  // 写一条日志。
+  svc.saveMealLog({ meal_id: mealId, sentence: '红烧肉绝了', rating: '好吃' });
+  assert.ok(repo.getMealLog(mealId), '删除前应有日志');
+
+  // 删除饭局。
+  const r = svc.deleteMeal(mealId);
+  assert.equal(r.deleted, true, '应返回已删除');
+
+  assert.equal(repo.getMeal(mealId), undefined, '饭局应不存在');
+  assert.equal(repo.getMealLog(mealId), undefined, '日志应被级联删除');
+  assert.deepEqual(repo.listMealItems(mealId), [], '点菜明细应被级联删除');
+  assert.deepEqual(repo.listPrep(mealId), [], '备菜条目应被级联删除');
+});
+
 test('库存批次录入生成 3 条', () => {
   const r = svc.bulkAddInventory('芹菜一斤，酱油一瓶、鸡蛋十个', '主厨');
   assert.equal(r.saved.length, 3);
   assert.equal(r.failed.length, 0);
 });
+

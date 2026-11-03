@@ -50,6 +50,7 @@ async function handleMeals(method, seg, req, res, q) {
     return ok(res, svc.togglePrep({ meal_id: id, entry_id: seg[3], prepared: !!b.prepared }));
   }
   if (id && seg[2] === 'prep' && !seg[3] && method === 'PATCH') return ok(res, svc.regeneratePrep(id));
+  if (id && method === 'DELETE') return ok(res, svc.deleteMeal(id));
   if (id && seg[2] === 'close' && method === 'PATCH') return ok(res, svc.closeMeal(id));
   if (id && seg[2] === 'log' && method === 'GET') return ok(res, svc.getMealWithPrep(id).log);
   if (id && seg[2] === 'log' && method === 'POST') {
@@ -110,3 +111,4 @@ async function handleInventory(method, seg, req, res, q) {
   }
   fail(res, 404, '没有这个库存接口');
 }
+
