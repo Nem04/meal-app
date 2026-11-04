@@ -1,27 +1,118 @@
-﻿// HTTP 路由：只做参数解析与转调服务层，不含业务逻辑。
+// HTTP 路由：只做参数解析与转调服务层，不含业务逻辑。
 import * as svc from './services.js';
 import { ok, created, fail } from './util.js';
+import { config } from './config.js';
+import { AppError } from './errors.js';
+import { bearerToken } from './auth/request.js';
+import { createWechatClient } from './auth/wechat.js';
 
-export async function handle(req, res, url) {
+const defaultWechatClient = createWechatClient({
+  appId: config.wxAppId,
+  appSecret: config.wxSecret,
+});
+
+function requireIdentity(req) {
+  if (req.member) return req.member;
+  if (config.authMode === 'legacy') {
+    const member = svc.identifyMemberById(req.headers['x-member-id'] || '');
+    if (!member) throw new AppError(401, 'UNAUTHORIZED', '请先选择身份');
+    req.member = member;
+    return member;
+  }
+  const auth = svc.authenticateToken(bearerToken(req));
+  req.member = auth.member;
+  req.session = auth.session;
+  return auth.member;
+}
+
+function guardChef(req) {
+  svc.guardChef(requireIdentity(req));
+}
+
+export async function handle(req, res, url, deps = {}) {
   const method = req.method;
   const path = url.pathname;
   const seg = path.split('/').filter(Boolean);
   const q = url.searchParams;
-
   try {
-    if (seg[0] === 'members') return await handleMembers(method, seg, req, res, q);
-    if (seg[0] === 'meals') return await handleMeals(method, seg, req, res, q);
-    if (seg[0] === 'recipes') return await handleRecipes(method, seg, req, res, q);
-    if (seg[0] === 'inventory') return await handleInventory(method, seg, req, res, q);
+    if (path === '/health' && method === 'GET') {
+      svc.healthCheck();
+      return ok(res, { status: 'ok' });
+    }
+    if (seg[0] === 'auth') {
+      return await handleAuth(method, seg, req, res, deps.wechatClient || defaultWechatClient);
+    }
+    if (seg[0] === 'meals') {
+      requireIdentity(req);
+      return await handleMeals(method, seg, req, res, q);
+    }
+    if (seg[0] === 'recipes') {
+      requireIdentity(req);
+      return await handleRecipes(method, seg, req, res, q);
+    }
+    if (seg[0] === 'inventory') {
+      requireIdentity(req);
+      return await handleInventory(method, seg, req, res, q);
+    }
+    if (seg[0] === 'members') {
+      requireIdentity(req);
+      return await handleMembers(method, seg, req, res, q);
+    }
     if (path === '/calendar' && method === 'GET') {
-      const year = Number(q.get('year') || new Date().getFullYear());
-      const month = Number(q.get('month') || (new Date().getMonth() + 1));
-      return ok(res, { days: svc.calendarMonth(year, month), year, month });
+      requireIdentity(req);
+      return ok(res, {
+        days: svc.calendarMonth(
+          Number(q.get('year') || new Date().getFullYear()),
+          Number(q.get('month') || new Date().getMonth() + 1),
+        ),
+      });
     }
     fail(res, 404, '没有这个接口');
-  } catch (e) {
-    fail(res, 400, e.message || '请求出错');
+  } catch (error) {
+    const status = Number.isInteger(error.status) ? error.status : 400;
+    fail(res, status, error.message || '请求出错', error.code || 'BAD_REQUEST');
   }
+}
+
+async function handleAuth(method, seg, req, res, wechatClient) {
+  const appConfig = {
+    chefBindCode: config.chefBindCode,
+    familyInviteCode: config.familyInviteCode,
+    sessionTtlDays: config.sessionTtlDays,
+  };
+  if (seg[1] === 'wechat' && method === 'POST') {
+    const body = await readBody(req);
+    return ok(res, await svc.loginWithWechat({
+      code: body.code,
+      wechatClient,
+      appConfig,
+    }));
+  }
+  if (seg[1] === 'bind' && method === 'POST') {
+    const body = await readBody(req);
+    return ok(res, await svc.bindWechatMember({
+      code: body.code,
+      kind: body.kind,
+      inviteCode: body.inviteCode,
+      displayName: body.displayName,
+      wechatClient,
+      appConfig,
+      attemptKeyPrefix: req.socket.remoteAddress || 'unknown',
+    }));
+  }
+  if (seg[1] === 'me' && method === 'GET') {
+    const member = requireIdentity(req);
+    return ok(res, {
+      member: svc.serializeMember(member),
+      expiresAt: req.session ? req.session.expires_at : null,
+    });
+  }
+  if (seg[1] === 'logout' && method === 'POST') {
+    const token = bearerToken(req);
+    svc.logoutToken(token);
+    return ok(res, { loggedOut: true });
+  }
+  fail(res, 404, '没有这个认证接口', 'NOT_FOUND');
 }
 
 async function readBody(req) {
@@ -32,7 +123,6 @@ async function readBody(req) {
   try { return JSON.parse(raw); } catch { return { _raw: raw }; }
 }
 function memberIdOf(req) { return req.headers['x-member-id'] || ''; }
-function guardChef(req) { svc.guardChef(memberIdOf(req)); }
 
 async function handleMeals(method, seg, req, res, q) {
   const id = seg[1];
@@ -41,7 +131,7 @@ async function handleMeals(method, seg, req, res, q) {
   if (!id && method === 'POST') {
     const b = await readBody(req);
     guardChef(req);
-    return created(res, svc.openMeal(b));
+    return created(res, svc.openMeal({ ...b, created_by: req.member.name }));
   }
   if (id && method === 'GET') return ok(res, svc.getMealWithPrep(id));
   if (id && seg[2] === 'items' && method === 'POST') {
@@ -126,14 +216,17 @@ async function handleInventory(method, seg, req, res, q) {
   fail(res, 404, '没有这个库存接口');
 }
 
-
 async function handleMembers(method, seg, req, res, q) {
-  if (method === 'GET') return ok(res, svc.listMembers());
-  if (method === 'POST') {
-    const b = await readBody(req);
-    // 首次或切换身份：name 即身份，返回 member 完整信息。
-    const member = svc.identifyMember(b.name || '');
-    return ok(res, member);
+  if (method === 'GET') {
+    return ok(res, svc.listMembers().map(svc.serializeMember));
   }
-  fail(res, 404, '没有这个成员接口');
+  if (method === 'POST' && config.authMode === 'legacy') {
+    const body = await readBody(req);
+    const member = svc.identifyMember(body.name || '');
+    return ok(res, svc.serializeMember(member));
+  }
+  if (method === 'POST') {
+    throw new AppError(403, 'MEMBER_CREATION_DISABLED', '正式环境不允许创建新成员');
+  }
+  fail(res, 404, '没有这个成员接口', 'NOT_FOUND');
 }

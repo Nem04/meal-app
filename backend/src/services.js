@@ -8,6 +8,10 @@ import { verifyBindCode } from './auth/passcode.js';
 import { hashSessionToken, newSessionToken, sessionExpiresAt } from './auth/session.js';
 import { createAttemptLimiter } from './auth/rateLimit.js';
 
+export function healthCheck() {
+  repo.db().prepare('SELECT 1').get();
+}
+
 // ---------- 菜品 / 菜谱 ----------
 export function listRecipes(category) {
   return repo.listRecipes(category || '');

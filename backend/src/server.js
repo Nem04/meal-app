@@ -24,6 +24,11 @@ const server = createServer((req, res) => {
     return;
   }
 
+  if (pathname === '/health') {
+    handle(req, res, url);
+    return;
+  }
+
   if (config.passcode) {
     const token = req.headers['x-family-passcode'] || '';
     if (token !== config.passcode) {
