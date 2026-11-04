@@ -16,3 +16,6 @@ autostart-test.log
 autostart-test.err.log
 winget-node.out.log
 winget-node.err.log
+deploy/.env.production
+data/
+data/backups/

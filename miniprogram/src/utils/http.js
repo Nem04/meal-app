@@ -7,17 +7,14 @@ export class ApiError extends Error {
   }
 }
 
-export function getBaseUrlForPlatform() {
-  try {
-    return uni.getSystemInfoSync().platform === 'devtools'
-      ? 'http://localhost:8080'
-      : 'http://192.168.5.2:8080';
-  } catch {
-    return 'http://192.168.5.2:8080';
-  }
-}
+const DEV_BASE_URL = 'http://localhost:8080';
+const PROD_BASE_URL = 'https://api.example.com';
 
-export const BASE_URL = getBaseUrlForPlatform();
+// Node 测试环境中 import.meta.env 为 undefined，使用可选链兜底；
+// 生产小程序构建时 import.meta.env.DEV 为 false，从而选择 HTTPS 地址。
+const isDev = import.meta.env?.DEV !== false;
+
+export const BASE_URL = isDev ? DEV_BASE_URL : PROD_BASE_URL;
 
 export function rawRequest(path, method = 'GET', body, options = {}) {
   const url = BASE_URL + (path.startsWith('/api') ? path : `/api${path}`);
