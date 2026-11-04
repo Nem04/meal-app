@@ -313,7 +313,29 @@ window.openRecipe = async function(id) {
     </div>
     <button class="primary-btn" onclick="forkRecipe('${r.current_version ? r.current_version.id : ''}')">另存为我家版 ✨</button>
     <button class="secondary-btn" onclick="editRecipe('${r.current_version ? r.current_version.id : ''}','${r.id}')">编辑我家版</button>
+    <button class="secondary-btn" style="color:var(--danger);border-color:var(--danger)" onclick="confirmDeleteRecipe('${r.id}','${esc(r.name)}')">删除这份菜谱</button>
   `);
+};
+window.confirmDeleteRecipe = function(id, name) {
+  openSheet(`
+    <h3>删除菜谱<button class="close-x" onclick="closeSheet()">×</button></h3>
+    <p class="muted">确定删除「${name}」吗？</p>
+    <p class="muted" style="margin-bottom:12px">如果这份菜谱已经被某顿饭用过，会被保护而不能删除。</p>
+    <button class="primary-btn" style="background:var(--danger)" onclick="doDeleteRecipe('${id}')">删除</button>
+    <button class="secondary-btn" onclick="closeSheet()">取消</button>
+  `);
+};
+
+window.doDeleteRecipe = async function(id) {
+  try {
+    await api(`/recipes/${id}`, 'DELETE', {});
+    toast('菜谱已删除 🗑');
+    closeSheet();
+    refreshRecipes();
+  } catch (e) {
+    toast(e.message);
+    closeSheet();
+  }
 };
 
 window.forkRecipe = async function(versionId) {

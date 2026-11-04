@@ -24,6 +24,17 @@ export function createRecipeFromSpecs({ name, category = '其他', steps = '', s
   return { recipe_id, version_id };
 }
 
+export function deleteRecipe(recipeId) {
+  const recipe = repo.getRecipe(recipeId);
+  if (!recipe) throw new Error('这份菜谱不存在');
+  // 保护历史：如果这道菜谱已经被某顿饭用过，不允许删除（会破坏历史饭局）。
+  const refs = repo.countRecipeMealReferences(recipeId);
+  if (refs > 0) {
+    throw new Error(`这份菜谱已被 ${refs} 顿饭用过，不能删除（会破坏历史记录）`);
+  }
+  const changes = repo.deleteRecipe(recipeId);
+  return { deleted: changes > 0, recipe_id: recipeId };
+}
 export function forkRecipeVersion(versionId) {
   const src = repo.getVersion(versionId);
   if (!src) throw new Error('菜谱版本不存在');

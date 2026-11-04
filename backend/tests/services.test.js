@@ -67,6 +67,22 @@ test('红线T3：同饭同菜重复点菜不新增行', () => {
   assert.equal(items[0].note, '加辣');
 });
 
+test('删除未使用过的菜谱', () => {
+  const { recipe_id } = seedRecipeWith('凉拌黄瓜', [{ raw_name: '黄瓜', quantity: 1, unit: '根' }]);
+  assert.ok(repo.getRecipe(recipe_id), '删除前应存在');
+  const r = svc.deleteRecipe(recipe_id);
+  assert.equal(r.deleted, true);
+  assert.equal(repo.getRecipe(recipe_id), undefined, '菜谱应被删除');
+});
+
+test('被饭局用过的菜谱拒绝删除', () => {
+  const { version_id, recipe_id } = seedRecipeWith('清蒸鲈鱼', [{ raw_name: '鲈鱼', quantity: 1, unit: '条' }]);
+  const meal = svc.openMeal({ title: '今晚', meal_date: '2026-11-04' });
+  svc.addMealItem({ meal_id: meal.id, recipe_version_id: version_id, submitter: '家人' });
+  assert.throws(() => svc.deleteRecipe(recipe_id), /已被.*顿饭用过/);
+  assert.ok(repo.getRecipe(recipe_id), '被使用的菜谱不应被删除');
+});
+
 test('删除饭局后，日志记录也级联删除', () => {
   const meal = svc.openMeal({ title: '今晚', meal_date: '2026-11-03' });
   const mealId = meal.id;
@@ -90,4 +106,5 @@ test('库存批次录入生成 3 条', () => {
   assert.equal(r.saved.length, 3);
   assert.equal(r.failed.length, 0);
 });
+
 

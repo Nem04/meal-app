@@ -81,6 +81,7 @@ async function handleRecipes(method, seg, req, res, q) {
     const b = await readBody(req);
     return ok(res, svc.overwriteVersion({ versionId: seg[3], ...b }));
   }
+  if (id && method === 'DELETE') return ok(res, svc.deleteRecipe(id));
   if (id && method === 'GET') return ok(res, svc.getRecipeDetail(id));
   fail(res, 404, '没有这个菜谱接口');
 }

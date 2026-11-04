@@ -33,6 +33,19 @@ export function listRecipes(category = '') {
 export function getRecipe(id) {
   return db().prepare('SELECT * FROM recipe WHERE id = ?').get(id);
 }
+export function countRecipeMealReferences(recipeId) {
+  const row = db().prepare(
+    'SELECT COUNT(*) AS n FROM meal_item mi JOIN recipe_version rv ON rv.id = mi.recipe_version_id ' +
+    'WHERE rv.recipe_id = ?'
+  ).get(recipeId);
+  return row ? Number(row.n) : 0;
+}
+
+export function deleteRecipe(id) {
+  // 外键级联：recipe_version ON DELETE CASCADE -> ingredient_spec, meal_item 同步删除。
+  const r = db().prepare('DELETE FROM recipe WHERE id = ?').run(id);
+  return r.changes;
+}
 
 export function createRecipe(name, category, source) {
   const d = db();
