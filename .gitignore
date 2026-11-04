@@ -7,3 +7,6 @@ backups/
 *.log
 *.err.log
 patch_front.js
+runtime/node.exe
+launch-test.log
+launch-test.err.log
