@@ -414,7 +414,7 @@ async function refreshInventory() {
     <button class="primary-btn" onclick="bulkForm()">📋 整段粘贴录入</button>
     <div class="section-head"><h4>库存清单（${list ? list.length : 0} 项）</h4></div>
     ${(list || []).map((i) => `
-      <div class="row"><div class="emoji">🥫</div><div class="body"><div class="title">${esc(i.canonical_name)}</div><div class="meta">${i.quantity} ${esc(i.unit)}${i.note ? ' · ' + esc(i.note) : ''}</div></div><button class="mini-btn plain" onclick="editStock('${i.id}','${i.canonical_name}','${i.quantity}','${i.unit}')">改</button></div>
+      <div class="row"><div class="emoji">🥫</div><div class="body"><div class="title">${esc(i.canonical_name)}</div><div class="meta">${i.quantity} ${esc(i.unit)}${i.note ? ' · ' + esc(i.note) : ""}</div></div><button class="mini-btn plain" onclick="editStock('${i.id}','${esc(i.canonical_name)}','${i.quantity}','${i.unit}')">改</button><button class="mini-btn plain" style="color:var(--danger)" onclick="confirmDeleteStock('${i.id}','${esc(i.canonical_name)}')">删</button></div>
     `).join('') || '<div class="empty">库存空空的，先粘贴录入吧</div>'}
   `;
   const s = document.getElementById('inv-search');
@@ -456,6 +456,27 @@ window.confirmBulk = async function(textEnc) {
   refreshInventory();
 };
 
+window.confirmDeleteStock = function(id, name) {
+  openSheet(`
+    <h3>删除库存<button class="close-x" onclick="closeSheet()">×</button></h3>
+    <p class="muted">确定删除「${name}」这条库存吗？</p>
+    <p class="muted" style="margin-bottom:12px">删除后不可恢复。</p>
+    <button class="primary-btn" style="background:var(--danger)" onclick="doDeleteStock('${id}')">删除</button>
+    <button class="secondary-btn" onclick="closeSheet()">取消</button>
+  `);
+};
+
+window.doDeleteStock = async function(id) {
+  try {
+    await api(`/inventory/${id}`, "DELETE", {});
+    toast("库存已删除 🗑");
+    closeSheet();
+    refreshInventory();
+  } catch (e) {
+    toast(e.message);
+    closeSheet();
+  }
+};
 window.editStock = function(id, name, qty, unit) {
   openSheet(`
     <h3>改库存 · ${esc(name)} <button class="close-x" onclick="closeSheet()">×</button></h3>

@@ -115,6 +115,7 @@ async function handleInventory(method, seg, req, res, q) {
     guardChef(req);
     return created(res, svc.inventoryAdd({ ...b, operator: b.operator || '手动录入' }));
   }
+  if (id && method === 'DELETE') { guardChef(req); return ok(res, svc.deleteInventory(id)); }
   if (id && method === 'PATCH') { guardChef(req);
     const b = await readBody(req);
     const op = b.op || q.get('op') || 'stocktake';

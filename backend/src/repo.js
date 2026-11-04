@@ -235,6 +235,10 @@ export function applyInventoryOp(itemId, op, delta, note, operator) {
     .run(newId(), itemId, op, Number(delta), note || '', operator || '', t);
   return { item_id: itemId, quantity: roundQty(newQty) };
 }
+export function deleteInventoryItem(itemId) {
+  const r = db().prepare('DELETE FROM inventory_item WHERE id = ?').run(itemId);
+  return r.changes;
+}
 
 // ---------- log ----------
 export function upsertMealLog(mealId, sentence, rating) {

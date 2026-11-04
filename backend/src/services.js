@@ -1,4 +1,4 @@
-﻿// 用例服务层：业务逻辑 + 红线守卫。路由层只转参数。
+// 用例服务层：业务逻辑 + 红线守卫。路由层只转参数。
 import * as repo from './repo.js';
 import { mergeIngredients } from './domain/merge.js';
 import { parseInventoryText } from './domain/parseInventory.js';
@@ -196,6 +196,11 @@ export function inventorySubtract({ id, quantity, note, operator }) {
 
 export function inventoryStocktake({ id, quantity, note, operator }) {
   return repo.applyInventoryOp(id, 'stocktake', Number(quantity) || 0, note, operator);
+}
+export function deleteInventory(id) {
+  const changes = repo.deleteInventoryItem(id);
+  if (changes === 0) throw new Error('库存条目不存在');
+  return { deleted: true, item_id: id };
 }
 
 // ---------- 日志 / 月历 ----------

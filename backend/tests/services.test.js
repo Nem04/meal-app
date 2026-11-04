@@ -130,3 +130,14 @@ test('主厨权限：默认主厨可通过 guardChef', () => {
   assert.equal(chef.role, 'chef');
   assert.doesNotThrow(() => svc.guardChef(chef.id));
 });
+
+test('删除库存条目', () => {
+  svc.bulkAddInventory('芹菜一斤、酱油一瓶', '主厨');
+  let inv = svc.listInventory();
+  const target = inv.find((i) => i.canonical_name === '芹菜');
+  assert.ok(target, '库存中应有芹菜');
+  const r = svc.deleteInventory(target.id);
+  assert.equal(r.deleted, true);
+  inv = svc.listInventory();
+  assert.equal(inv.find((i) => i.id === target.id), undefined, '库存应被删除');
+});
