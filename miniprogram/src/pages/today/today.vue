@@ -17,7 +17,7 @@
 
     <!-- 主内容 -->
     <view v-else>
-      <view class="hello">你好，{{ member.name }} · {{ member.role === 'chef' ? '主厨' : '家人' }}</view>
+      <view class="hello">{{ greetingLine }}<text class="role-chip">{{ member.role === 'chef' ? '主厨' : '家人' }}</text></view>
 
       <!-- 进行中的饭 -->
       <view v-if="openMeal" class="hero">
@@ -53,26 +53,52 @@
 </template>
 
 <script>
-import { request, toast, getMember, saveMember, isChefNow } from '../../utils/index.js';
+import { request, toast, getMember, saveMember } from '../../utils/index.js';
+import { getGreeting } from '../../utils/greeting.js';
 
 export default {
   data() {
     return {
       member: null,
+      greeting: getGreeting(),
       members: [],
       meals: [],
     };
   },
   computed: {
     isChef() { return this.member && this.member.role === 'chef'; },
+    greetingLine() {
+      if (!this.member) return this.greeting;
+      const separator = this.greeting.endsWith('～') ? ' ' : '，';
+      return `${this.greeting}${separator}${this.member.name}`;
+    },
     openMeal() { return this.meals.find((m) => m.status === 'open'); },
     closedMeals() { return this.meals.filter((m) => m.status !== 'open').slice(0, 8); },
   },
   onShow() {
+    this.scheduleGreetingRefresh();
     this.member = getMember();
     this.init();
   },
+  onHide() {
+    this.stopGreetingRefresh();
+  },
+  onUnload() {
+    this.stopGreetingRefresh();
+  },
   methods: {
+    scheduleGreetingRefresh() {
+      this.stopGreetingRefresh();
+      this.greeting = getGreeting();
+      const delay = 60000 - (Date.now() % 60000) + 50;
+      this.greetingTimer = setTimeout(() => this.scheduleGreetingRefresh(), delay);
+    },
+    stopGreetingRefresh() {
+      if (this.greetingTimer) {
+        clearTimeout(this.greetingTimer);
+        this.greetingTimer = null;
+      }
+    },
     async init() {
       try {
         this.members = await request('/members');
@@ -120,7 +146,11 @@ export default {
   display: flex; align-items: center; gap: 20rpx;
   padding: 20rpx; border-bottom: 1rpx solid #EFE7DC;
 }
-.hello { margin: 20rpx 24rpx 0; font-size: 26rpx; color: #8A8077; }
+.hello { margin: 20rpx 24rpx 0; font-size: 26rpx; color: #8A8077; display: flex; align-items: center; gap: 12rpx; }
+.role-chip {
+  background: #EAF2E7; color: #4F7A4E; font-size: 22rpx;
+  padding: 2rpx 16rpx; border-radius: 999rpx;
+}
 .hero {
   background: linear-gradient(135deg, #5B8C5A, #72A06D);
   color: #fff; border-radius: 26rpx; padding: 32rpx; margin: 20rpx 24rpx;

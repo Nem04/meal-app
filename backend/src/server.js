@@ -1,4 +1,4 @@
-import { createServer } from 'node:http';
+﻿import { createServer } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { URL } from 'node:url';
 import { config } from './config.js';
@@ -39,7 +39,19 @@ const server = createServer((req, res) => {
     return;
   }
 
-  // /api/calendar 等非 /api 前缀的口令态也在 /api 下；其余走静态资源。
+  // 兼容不带 /api 前缀的业务接口（小程序等客户端）。
+  const isBizPath =
+    pathname.startsWith('/meals') ||
+    pathname.startsWith('/recipes') ||
+    pathname.startsWith('/inventory') ||
+    pathname.startsWith('/members') ||
+    pathname.startsWith('/calendar');
+  if (isBizPath) {
+    handle(req, res, url);
+    return;
+  }
+
+  // 其余走静态资源。
   serveStatic(pathname, res);
 });
 

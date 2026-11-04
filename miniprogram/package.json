@@ -1,7 +1,9 @@
 {
   "name": "uni-preset-vue",
   "version": "0.0.0",
+  "type": "module",
   "scripts": {
+    "test": "node --test tests/*.test.js",
     "dev:custom": "uni -p",
     "dev:h5": "uni",
     "dev:h5:ssr": "uni --ssr",
