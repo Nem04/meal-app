@@ -31,6 +31,9 @@ export function openDb() {
   const seedCount = db.prepare('SELECT COUNT(*) AS n FROM recipe').get().n;
   if (seedCount === 0) seed(db);
 
+  const memberCount = db.prepare('SELECT COUNT(*) AS n FROM family_member').get().n;
+  if (memberCount === 0) seedMembers(db);
+
   return db;
 }
 
@@ -41,6 +44,13 @@ export function closeDbForTest() {
   }
 }
 
+function seedMembers(database) {
+  const t = new Date().toISOString();
+  database.prepare("INSERT INTO family_member(id,name,role,color,openid,created_at) VALUES(?,?,?,?,NULL,?)")
+    .run('member-chef', '主厨', 'chef', '#D96A3B', t);
+  database.prepare("INSERT INTO family_member(id,name,role,color,openid,created_at) VALUES(?,?,?,?,NULL,?)")
+    .run('member-family', '家人', 'member', '#5B8C5A', t);
+}
 function seed(database) {
   const t = new Date().toISOString();
   const r1 = 'recipe-seed-001';

@@ -108,3 +108,25 @@ test('库存批次录入生成 3 条', () => {
 });
 
 
+
+test('成员身份：点餐记录是谁点的', () => {
+  const { version_id } = seedRecipeWith('蒜蓉炒蛋', [{ raw_name: '鸡蛋', quantity: 2, unit: '个' }]);
+  const member = svc.identifyMember('妈妈');
+  const meal = svc.openMeal({ title: '今晚', meal_date: '2026-11-04', created_by: '主厨' });
+  svc.addMealItem({ meal_id: meal.id, recipe_version_id: version_id, submitter: member.name });
+  const items = repo.listMealItems(meal.id);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].submitter, '妈妈', '点餐人应被记录');
+});
+
+test('主厨权限：普通家人调用 guardChef 应被拒绝', () => {
+  const member = svc.identifyMember('表弟');
+  assert.equal(member.role, 'member');
+  assert.throws(() => svc.guardChef(member.id), /只有主厨/);
+});
+
+test('主厨权限：默认主厨可通过 guardChef', () => {
+  const chef = svc.identifyMember('主厨');
+  assert.equal(chef.role, 'chef');
+  assert.doesNotThrow(() => svc.guardChef(chef.id));
+});

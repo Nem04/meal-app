@@ -266,3 +266,29 @@ export function mealsForMonth(year, month) {
 
 function roundQty(n) { return Math.round(n * 100) / 100; }
 
+// ---------- family_member ----------
+export function listMembers() {
+  return db().prepare('SELECT * FROM family_member ORDER BY role DESC, created_at ASC').all();
+}
+
+export function getMemberById(id) {
+  return db().prepare('SELECT * FROM family_member WHERE id = ?').get(id);
+}
+
+export function getMemberByName(name) {
+  return db().prepare('SELECT * FROM family_member WHERE name = ?').get(name);
+}
+
+export function upsertMemberByName(name, role, color) {
+  const d = db();
+  const existing = d.prepare('SELECT id FROM family_member WHERE name = ?').get(name);
+  if (existing) {
+    d.prepare('UPDATE family_member SET role = ?, color = ? WHERE id = ?').run(role, color, existing.id);
+    return existing.id;
+  }
+  const t = new Date().toISOString();
+  const id = newId();
+  d.prepare('INSERT INTO family_member(id,name,role,color,openid,created_at) VALUES(?,?,?,?,NULL,?)')
+    .run(id, name, role, color, t);
+  return id;
+}

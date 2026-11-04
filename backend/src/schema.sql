@@ -92,3 +92,11 @@ CREATE TABLE IF NOT EXISTS meal_log (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS family_member (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'member',
+  color TEXT NOT NULL DEFAULT '#5B8C5A',
+  openid TEXT,
+  created_at TEXT NOT NULL
+);

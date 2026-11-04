@@ -1,4 +1,4 @@
-// 用例服务层：业务逻辑 + 红线守卫。路由层只转参数。
+﻿// 用例服务层：业务逻辑 + 红线守卫。路由层只转参数。
 import * as repo from './repo.js';
 import { mergeIngredients } from './domain/merge.js';
 import { parseInventoryText } from './domain/parseInventory.js';
@@ -214,3 +214,40 @@ function dbAll(sql, ...args) {
   return repo.db().prepare(sql).all(...args);
 }
 
+// ---------- 家庭成员 ----------
+export function listMembers() {
+  return repo.listMembers();
+}
+
+export function identifyMemberById(id) {
+  if (!id) return null;
+  return repo.getMemberById(id);
+}
+
+export function identifyMember(name) {
+  const clean = (name || '').trim();
+  if (!clean) throw new Error('请先选择「我是谁」');
+  const existing = repo.getMemberByName(clean);
+  if (existing) return existing;
+  // 新名字默认是普通家人（member），颜色随机暖色。
+  const palette = ['#5B8C5A', '#D96A3B', '#4F7A4E', '#C94F3D', '#8A6E5A', '#6A8C7B'];
+  const color = palette[Math.floor(Math.random() * palette.length)];
+  const id = repo.upsertMemberByName(clean, 'member', color);
+  return repo.getMemberById(id);
+}
+
+export function isChef(memberId) {
+  const m = repo.getMemberById(memberId);
+  return !!m && m.role === 'chef';
+}
+
+export function guardChef(memberId, action = '该操作') {
+  if (!isChef(memberId)) {
+    throw new Error(`${action}只有主厨才能做`);
+  }
+}
+
+export function memberFromRequest(req) {
+  const id = req.headers['x-member-id'] || '';
+  return id;
+}

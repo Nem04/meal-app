@@ -1,4 +1,4 @@
-// HTTP 路由：只做参数解析与转调服务层，不含业务逻辑。
+﻿// HTTP 路由：只做参数解析与转调服务层，不含业务逻辑。
 import * as svc from './services.js';
 import { ok, created, fail } from './util.js';
 
@@ -9,6 +9,7 @@ export async function handle(req, res, url) {
   const q = url.searchParams;
 
   try {
+    if (seg[0] === 'members') return await handleMembers(method, seg, req, res, q);
     if (seg[0] === 'meals') return await handleMeals(method, seg, req, res, q);
     if (seg[0] === 'recipes') return await handleRecipes(method, seg, req, res, q);
     if (seg[0] === 'inventory') return await handleInventory(method, seg, req, res, q);
@@ -30,6 +31,8 @@ async function readBody(req) {
   if (!raw) return {};
   try { return JSON.parse(raw); } catch { return { _raw: raw }; }
 }
+function memberIdOf(req) { return req.headers['x-member-id'] || ''; }
+function guardChef(req) { svc.guardChef(memberIdOf(req)); }
 
 async function handleMeals(method, seg, req, res, q) {
   const id = seg[1];
@@ -37,21 +40,25 @@ async function handleMeals(method, seg, req, res, q) {
   if (!id && method === 'GET') return ok(res, svc.listMeals());
   if (!id && method === 'POST') {
     const b = await readBody(req);
+    guardChef(req);
     return created(res, svc.openMeal(b));
   }
   if (id && method === 'GET') return ok(res, svc.getMealWithPrep(id));
   if (id && seg[2] === 'items' && method === 'POST') {
     const b = await readBody(req);
-    return created(res, svc.addMealItem({ ...b, meal_id: id }));
+    const caller = svc.identifyMemberById(memberIdOf(req));
+    if (!caller) throw new Error('请先选择我是谁');
+    return created(res, svc.addMealItem({ ...b, meal_id: id, submitter: caller.name }));
   }
   if (id && seg[2] === 'prep' && method === 'GET') return ok(res, svc.listPrep(id));
   if (id && seg[2] === 'prep' && seg[3] && method === 'PATCH') {
     const b = await readBody(req);
+    guardChef(req);
     return ok(res, svc.togglePrep({ meal_id: id, entry_id: seg[3], prepared: !!b.prepared }));
   }
   if (id && seg[2] === 'prep' && !seg[3] && method === 'PATCH') return ok(res, svc.regeneratePrep(id));
-  if (id && method === 'DELETE') return ok(res, svc.deleteMeal(id));
-  if (id && seg[2] === 'close' && method === 'PATCH') return ok(res, svc.closeMeal(id));
+  if (id && method === 'DELETE') { guardChef(req); return ok(res, svc.deleteMeal(id)); }
+  if (id && seg[2] === 'close' && method === 'PATCH') { guardChef(req); return ok(res, svc.closeMeal(id)); }
   if (id && seg[2] === 'log' && method === 'GET') return ok(res, svc.getMealWithPrep(id).log);
   if (id && seg[2] === 'log' && method === 'POST') {
     const b = await readBody(req);
@@ -72,16 +79,19 @@ async function handleRecipes(method, seg, req, res, q) {
   if (!id && method === 'GET') return ok(res, svc.listRecipes(q.get('category') || ''));
   if (!id && method === 'POST') {
     const b = await readBody(req);
+    guardChef(req);
     return created(res, svc.createRecipeFromSpecs(b));
   }
   if (id === 'x' && seg[2] === 'versions' && seg[3] && seg[4] === 'fork' && method === 'POST') {
+    guardChef(req);
     return created(res, svc.forkRecipeVersion(seg[3]));
   }
   if (id === 'x' && seg[2] === 'versions' && seg[3] && (method === 'PUT' || method === 'PATCH')) {
     const b = await readBody(req);
+    guardChef(req);
     return ok(res, svc.overwriteVersion({ versionId: seg[3], ...b }));
   }
-  if (id && method === 'DELETE') return ok(res, svc.deleteRecipe(id));
+  if (id && method === 'DELETE') { guardChef(req); return ok(res, svc.deleteRecipe(id)); }
   if (id && method === 'GET') return ok(res, svc.getRecipeDetail(id));
   fail(res, 404, '没有这个菜谱接口');
 }
@@ -97,13 +107,15 @@ async function handleInventory(method, seg, req, res, q) {
   }
   if (seg[1] === 'bulk' && method === 'POST') {
     const b = await readBody(req);
+    guardChef(req);
     return created(res, svc.bulkAddInventory(b.text || '', b.operator || ''));
   }
   if (!id && method === 'POST') {
     const b = await readBody(req);
+    guardChef(req);
     return created(res, svc.inventoryAdd({ ...b, operator: b.operator || '手动录入' }));
   }
-  if (id && method === 'PATCH') {
+  if (id && method === 'PATCH') { guardChef(req);
     const b = await readBody(req);
     const op = b.op || q.get('op') || 'stocktake';
     if (op === 'subtract') return ok(res, svc.inventorySubtract({ ...b, id }));
@@ -113,3 +125,14 @@ async function handleInventory(method, seg, req, res, q) {
   fail(res, 404, '没有这个库存接口');
 }
 
+
+async function handleMembers(method, seg, req, res, q) {
+  if (method === 'GET') return ok(res, svc.listMembers());
+  if (method === 'POST') {
+    const b = await readBody(req);
+    // 首次或切换身份：name 即身份，返回 member 完整信息。
+    const member = svc.identifyMember(b.name || '');
+    return ok(res, member);
+  }
+  fail(res, 404, '没有这个成员接口');
+}

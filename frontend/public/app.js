@@ -2,6 +2,26 @@
 const API = '/api';
 let state = { tab: 'today', category: '全部', search: '', calendarYear: 0, calendarMonth: 0 };
 
+// ---------- 身份 ----------
+const MEMBER_KEY = 'family-meal-member';
+
+function currentMemberId() {
+  try { return localStorage.getItem(MEMBER_KEY) || ''; } catch { return ''; }
+}
+function currentMember() {
+  try { const raw = localStorage.getItem(MEMBER_KEY + ':info'); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+function saveMember(m) {
+  try {
+    localStorage.setItem(MEMBER_KEY, m.id);
+    localStorage.setItem(MEMBER_KEY + ':info', JSON.stringify(m));
+  } catch {}
+}
+function clearMember() {
+  try { localStorage.removeItem(MEMBER_KEY); localStorage.removeItem(MEMBER_KEY + ':info'); } catch {}
+}
+function isChefNow() { const m = currentMember(); return m && m.role === 'chef'; }
+
 const view = document.getElementById('view');
 const toastEl = document.getElementById('toast');
 const sheetEl = document.getElementById('sheet');
@@ -12,6 +32,8 @@ const tabs = document.querySelectorAll('.tab');
 async function api(path, method = 'GET', body, passcode) {
   const headers = { 'Content-Type': 'application/json' };
   if (passcode) headers['x-family-passcode'] = passcode;
+  const mid = currentMemberId();
+  if (mid) headers['x-member-id'] = mid;
   const resp = await fetch(API + path, {
     method,
     headers,
@@ -156,7 +178,7 @@ window.state = state;
 window.doAddDish = async function(mealId, versionId) {
   const note = '';
   try {
-    await api(`/meals/${mealId}/items`, 'POST', { recipe_version_id: versionId, submitter: '家人', quantity: 1, note });
+    await api(`/meals/${mealId}/items`, 'POST', { recipe_version_id: versionId, submitter: (currentMember() ? currentMember().name : '家人'), quantity: 1, note });
     toast('已点上这道菜 ✅');
     closeSheet();
     const meal = await api(`/meals/${mealId}`);
@@ -374,7 +396,7 @@ window.addToOpenMeal = async function(recipeId) {
   const open = meals.find((m) => m.status === 'open');
   if (!open) return toast('先开一顿饭吧 🍳');
   const r = await api(`/recipes/${recipeId}`);
-  await api(`/meals/${open.id}/items`, 'POST', { recipe_version_id: r.current_version.id, quantity: 1, note: '' });
+  await api(`/meals/${open.id}/items`, 'POST', { recipe_version_id: r.current_version.id, quantity: 1, note: '', submitter: (currentMember() ? currentMember().name : '家人') });
   toast('已加入这顿饭 ✅');
 };
 
@@ -551,4 +573,60 @@ window.doLeaveLog = async function(mealId) {
 // ---------- 启动 ----------
 setGreet();
 tabs.forEach((t) => t.addEventListener('click', () => render(t.dataset.tab)));
-render('today');
+initIdentity();
+
+// ---------- 身份选择 ----------
+async function initIdentity() {
+  const me = currentMember();
+  if (me && me.id) {
+    updateIdentityBadge(me);
+    return;
+  }
+  await showIdentityPicker();
+}
+
+async function showIdentityPicker() {
+  let members = [];
+  try { members = await api('/members'); } catch { members = []; }
+  const rows = members.map((m) => `
+    <div class="row" style="cursor:pointer" onclick="pickMember('${m.id}','${esc(m.name)}')">
+      <div class="emoji">${m.role === 'chef' ? '👨‍🍳' : '👤'}</div>
+      <div class="body"><div class="title">${esc(m.name)}</div><div class="meta">${m.role === 'chef' ? '主厨（可编辑）' : '家人（可点餐）'}</div></div>
+    </div>`).join('');
+  openSheet(`
+    <h3>你是谁？<button class="close-x" onclick="closeSheet()">×</button></h3>
+    <p class="muted" style="margin-bottom:12px">选择身份后，点餐和编辑都会记录是谁操作的。</p>
+    ${rows || '<div class="empty">还没有成员</div>'}
+    <input class="input" id="new-member-name" placeholder="或输入新昵称（默认是家人）">
+    <button class="primary-btn" onclick="addNewMember()">用这个昵称进入</button>
+  `);
+}
+
+window.pickMember = async function(id, name) {
+  saveMember({ id, name, role: name === '主厨' ? 'chef' : 'member' });
+  closeSheet();
+  updateIdentityBadge(currentMember());
+  toast(`你好，${name} 👋`);
+  render('today');
+};
+
+window.addNewMember = async function() {
+  const name = document.getElementById('new-member-name').value.trim();
+  if (!name) return toast('先填一个昵称');
+  const m = await api('/members', 'POST', { name });
+  saveMember(m);
+  closeSheet();
+  updateIdentityBadge(m);
+  toast(`你好，${m.name} 👋`);
+  render('today');
+};
+
+function updateIdentityBadge(m) {
+  const greet = document.getElementById('greet');
+  if (greet) greet.innerHTML = `${esc(m.name)} · ${m.role === 'chef' ? '主厨' : '家人'} <button class="tab" onclick="switchIdentity()" style="display:inline;border:none;background:none;font-size:12px;color:var(--ink2);cursor:pointer">切换</button>`;
+}
+
+window.switchIdentity = function() {
+  clearMember();
+  showIdentityPicker();
+};
