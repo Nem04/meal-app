@@ -351,6 +351,30 @@ export function listBoundMembers() {
   ).all();
 }
 
+export function changeMemberRole({ memberId, role, color }) {
+  const d = db();
+  d.exec('BEGIN IMMEDIATE');
+  try {
+    const member = d.prepare('SELECT * FROM family_member WHERE id = ?').get(memberId);
+    if (!member) throw new AppError(404, 'MEMBER_NOT_FOUND', '成员不存在');
+    if (member.role === 'chef' && role === 'member') {
+      const chefCount = d.prepare(
+        "SELECT COUNT(*) AS n FROM family_member WHERE role = 'chef' AND openid IS NOT NULL",
+      ).get().n;
+      if (chefCount <= 1) {
+        throw new AppError(409, 'LAST_CHEF_REQUIRED', '至少需要保留一名主厨');
+      }
+    }
+    d.prepare('UPDATE family_member SET role = ?, color = ? WHERE id = ?')
+      .run(role, color, memberId);
+    d.exec('COMMIT');
+    return d.prepare('SELECT * FROM family_member WHERE id = ?').get(memberId);
+  } catch (error) {
+    d.exec('ROLLBACK');
+    throw error;
+  }
+}
+
 export function createAuthSession({ tokenHash, memberId, createdAt, expiresAt }) {
   db().prepare(
     'INSERT INTO auth_session(token_hash, member_id, created_at, expires_at, last_seen_at) VALUES(?,?,?,?,?)',

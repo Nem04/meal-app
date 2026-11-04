@@ -4,6 +4,9 @@
       <view class="hello">
         {{ greetingLine }}
         <text class="role-chip">{{ member.role === 'chef' ? '主厨' : '家人' }}</text>
+        <text class="role-action" @tap="goRole">
+          {{ member.role === 'chef' ? '改为家人' : '升级为主厨' }}
+        </text>
       </view>
 
       <!-- 进行中的饭 -->
@@ -41,7 +44,7 @@
 
 <script>
 import { request, toast, getMember } from '../../utils/index.js';
-import { ensureLogin } from '../../utils/auth.js';
+import { ensureLogin, refreshMember } from '../../utils/auth.js';
 import { getGreeting } from '../../utils/greeting.js';
 
 export default {
@@ -66,6 +69,12 @@ export default {
     this.scheduleGreetingRefresh();
     try {
       this.member = await ensureLogin();
+      try {
+        const fresh = await refreshMember();
+        if (fresh) this.member = fresh;
+      } catch (error) {
+        if (error.status === 401) this.member = await ensureLogin(true);
+      }
       await this.init();
     } catch (error) {
       if (error.code !== 'BIND_REQUIRED') toast(error.message);
@@ -89,6 +98,9 @@ export default {
         clearTimeout(this.greetingTimer);
         this.greetingTimer = null;
       }
+    },
+    goRole() {
+      uni.navigateTo({ url: '/pages/role/role' });
     },
     async init() {
       try {
@@ -133,6 +145,7 @@ export default {
   background: #EAF2E7; color: #4F7A4E; font-size: 22rpx;
   padding: 2rpx 16rpx; border-radius: 999rpx;
 }
+.role-action { color: #D96A3B; font-size: 24rpx; margin-left: auto; padding: 4rpx 10rpx; }
 .hero {
   background: linear-gradient(135deg, #5B8C5A, #72A06D);
   color: #fff; border-radius: 26rpx; padding: 32rpx; margin: 20rpx 24rpx;

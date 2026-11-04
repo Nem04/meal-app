@@ -97,6 +97,17 @@ async function handleAuth(method, seg, req, res, wechatClient) {
       attemptKeyPrefix: req.socket.remoteAddress || 'unknown',
     }));
   }
+  if (seg[1] === 'change-role' && method === 'POST') {
+    const member = requireIdentity(req);
+    const body = await readBody(req);
+    return ok(res, svc.changeMemberRole({
+      member,
+      kind: body.kind,
+      inviteCode: body.inviteCode,
+      appConfig,
+      attemptKeyPrefix: req.socket.remoteAddress || 'unknown',
+    }));
+  }
   if (seg[1] === 'me' && method === 'GET') {
     const member = requireIdentity(req);
     return ok(res, {

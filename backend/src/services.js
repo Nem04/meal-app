@@ -322,6 +322,32 @@ export function listBoundMembers() {
   return repo.listBoundMembers().map(serializeMember);
 }
 
+export function changeMemberRole({
+  member,
+  kind,
+  inviteCode,
+  appConfig,
+  attemptLimiter = defaultBindLimiter,
+  attemptKeyPrefix = 'unknown',
+}) {
+  const attemptKey = `${attemptKeyPrefix}:role:${member.id}:${kind}`;
+  attemptLimiter.assertAllowed(attemptKey);
+  try {
+    verifyBindCode(kind, inviteCode, appConfig);
+  } catch (error) {
+    if (error.code === 'INVALID_INVITE_CODE') attemptLimiter.recordFailure(attemptKey);
+    throw error;
+  }
+  const role = ROLE_BY_KIND[kind];
+  const updated = repo.changeMemberRole({
+    memberId: member.id,
+    role,
+    color: COLOR_BY_ROLE[role],
+  });
+  attemptLimiter.clear(attemptKey);
+  return serializeMember(updated);
+}
+
 export async function bindWechatMember({
   code,
   kind,

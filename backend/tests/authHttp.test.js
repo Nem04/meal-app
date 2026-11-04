@@ -350,3 +350,51 @@ test('两位成员点同一道菜时保留两条提交审计', async () => {
   );
   assert.ok(submissions.every((s) => s.recipe_version_id === recipe.version_id));
 });
+
+test('家人通过 HTTP 输入主厨码升级后获得主厨权限', async () => {
+  nextOpenid = 'openid-role-change-20261105';
+  const login = await fetch(`${baseUrl}/auth/wechat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: 'good-code' }),
+  });
+  assert.equal((await login.json()).data.status, 'needs_binding');
+
+  const bind = await fetch(`${baseUrl}/auth/bind`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      code: 'good-code',
+      kind: 'family',
+      inviteCode: 'family-code-123',
+      displayName: '角色家人甲',
+    }),
+  });
+  const bound = (await bind.json()).data;
+  assert.equal(bound.member.role, 'member');
+
+  const changed = await fetch(`${baseUrl}/auth/change-role`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${bound.token}`,
+    },
+    body: JSON.stringify({
+      kind: 'chef',
+      inviteCode: 'chef-code-12345',
+    }),
+  });
+  assert.equal(changed.status, 200);
+  const changedBody = (await changed.json()).data;
+  assert.equal(changedBody.role, 'chef');
+
+  const meal = await fetch(`${baseUrl}/meals`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${bound.token}`,
+    },
+    body: JSON.stringify({ title: '升级后开饭' }),
+  });
+  assert.equal(meal.status, 201);
+});
