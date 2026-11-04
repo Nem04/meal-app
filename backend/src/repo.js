@@ -324,6 +324,33 @@ export function bindMemberSlot({ openid, memberId, name, boundAt }) {
   }
 }
 
+export function bindMemberAccount({ openid, role, name, color, boundAt }) {
+  const d = db();
+  d.exec('BEGIN IMMEDIATE');
+  try {
+    const existing = d.prepare('SELECT * FROM family_member WHERE openid = ?').get(openid);
+    if (existing) {
+      throw new AppError(409, 'OPENID_ALREADY_BOUND', '这个微信已经绑定家庭成员');
+    }
+    const id = newId();
+    const createdAt = new Date().toISOString();
+    d.prepare(
+      'INSERT INTO family_member(id,name,role,color,openid,bound_at,created_at) VALUES(?,?,?,?,?,?,?)',
+    ).run(id, name, role, color, openid, boundAt, createdAt);
+    d.exec('COMMIT');
+    return d.prepare('SELECT * FROM family_member WHERE id = ?').get(id);
+  } catch (error) {
+    d.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+export function listBoundMembers() {
+  return db().prepare(
+    'SELECT * FROM family_member WHERE openid IS NOT NULL ORDER BY role DESC, created_at ASC',
+  ).all();
+}
+
 export function createAuthSession({ tokenHash, memberId, createdAt, expiresAt }) {
   db().prepare(
     'INSERT INTO auth_session(token_hash, member_id, created_at, expires_at, last_seen_at) VALUES(?,?,?,?,?)',
