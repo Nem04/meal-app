@@ -41,6 +41,12 @@
       "style": {
         "navigationBarTitleText": "菜谱详情"
       }
+    },
+    {
+      "path": "pages/bind/bind",
+      "style": {
+        "navigationBarTitleText": "绑定家庭成员"
+      }
     }
   ],
   "globalStyle": {

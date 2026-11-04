@@ -77,3 +77,34 @@ test('已有 token 时 ensureLogin 不重复请求微信登录', async () => {
   assert.equal(member.id, 'member-family');
   assert.equal(loginCalls, 0);
 });
+
+test('正确绑定后保存成员并返回成员信息', async () => {
+  let requestBody;
+  globalThis.uni.request = ({ data, success }) => {
+    requestBody = data;
+    success({
+      statusCode: 200,
+      data: {
+        ok: true,
+        data: {
+          status: 'bound',
+          token: 'token-family',
+          member: {
+            id: 'member-family',
+            name: '妈妈',
+            role: 'member',
+            color: '#5B8C5A',
+          },
+        },
+      },
+    });
+  };
+  const member = await auth.bindWechatMember({
+    kind: 'family',
+    inviteCode: 'family-code-123',
+    displayName: '妈妈',
+  });
+  assert.equal(requestBody.kind, 'family');
+  assert.equal(member.name, '妈妈');
+  assert.equal(auth.getTokenValue(), 'token-family');
+});

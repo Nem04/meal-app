@@ -1,23 +1,10 @@
 <template>
   <view>
-    <!-- 身份 -->
-    <view class="identity" v-if="!member">
-      <view class="card">
-        <view class="section-title">你是谁？</view>
-        <view class="muted" style="margin:0 24rpx 16rpx;">选择身份后，点餐和编辑都会记录是谁操作的。</view>
-        <view v-for="m in members" :key="m.id" class="member-row" @tap="pickMember(m)">
-          <view class="emoji">{{ m.role === 'chef' ? '👨‍🍳' : '👤' }}</view>
-          <view style="flex:1">
-            <view style="font-weight:600">{{ m.name }}</view>
-            <view class="muted">{{ m.role === 'chef' ? '主厨（可编辑）' : '家人（可点餐）' }}</view>
-          </view>
-        </view>
+    <view v-if="member">
+      <view class="hello">
+        {{ greetingLine }}
+        <text class="role-chip">{{ member.role === 'chef' ? '主厨' : '家人' }}</text>
       </view>
-    </view>
-
-    <!-- 主内容 -->
-    <view v-else>
-      <view class="hello">{{ greetingLine }}<text class="role-chip">{{ member.role === 'chef' ? '主厨' : '家人' }}</text></view>
 
       <!-- 进行中的饭 -->
       <view v-if="openMeal" class="hero">
@@ -53,15 +40,15 @@
 </template>
 
 <script>
-import { request, toast, getMember, saveMember } from '../../utils/index.js';
+import { request, toast, getMember } from '../../utils/index.js';
+import { ensureLogin } from '../../utils/auth.js';
 import { getGreeting } from '../../utils/greeting.js';
 
 export default {
   data() {
     return {
-      member: null,
+      member: getMember(),
       greeting: getGreeting(),
-      members: [],
       meals: [],
     };
   },
@@ -75,10 +62,14 @@ export default {
     openMeal() { return this.meals.find((m) => m.status === 'open'); },
     closedMeals() { return this.meals.filter((m) => m.status !== 'open').slice(0, 8); },
   },
-  onShow() {
+  async onShow() {
     this.scheduleGreetingRefresh();
-    this.member = getMember();
-    this.init();
+    try {
+      this.member = await ensureLogin();
+      await this.init();
+    } catch (error) {
+      if (error.code !== 'BIND_REQUIRED') toast(error.message);
+    }
   },
   onHide() {
     this.stopGreetingRefresh();
@@ -101,14 +92,10 @@ export default {
     },
     async init() {
       try {
-        this.members = await request('/members');
         this.meals = await request('/meals');
-      } catch (e) { toast(e.message); }
-    },
-    async pickMember(m) {
-      saveMember(m);
-      this.member = m;
-      await this.init();
+      } catch (error) {
+        toast(error.message);
+      }
     },
     async openMealForm() {
       const title = await this.prompt('开一顿饭', '饭名（默认「今晚这顿饭」）');
@@ -141,11 +128,6 @@ export default {
 </script>
 
 <style>
-.identity { padding-top: 20rpx; }
-.member-row {
-  display: flex; align-items: center; gap: 20rpx;
-  padding: 20rpx; border-bottom: 1rpx solid #EFE7DC;
-}
 .hello { margin: 20rpx 24rpx 0; font-size: 26rpx; color: #8A8077; display: flex; align-items: center; gap: 12rpx; }
 .role-chip {
   background: #EAF2E7; color: #4F7A4E; font-size: 22rpx;
