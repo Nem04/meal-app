@@ -22,7 +22,7 @@
 1. 微信开发者工具右上角「**详情**」→「**本地设置**」；
 2. 勾选「**不校验合法域名、web-view（业务域名）、TLS 版本以及 HTTPS 证书**」。
 
-> 这一步在 `manifest.json` 的 `mp-weixin.setting.urlCheck: false` 已预设，通常导入即生效；如仍拦截，手动勾选一次。
+> `manifest.json` 的 `mp-weixin.setting.urlCheck` 已预设为 `true`，用于正式环境的合法域名校验，不要改为 `false`。开发阶段如被域名校验拦截，只在微信开发者工具「本地设置」中临时勾选上述选项，不要把临时开关写回 manifest。
 
 ## 三、真机预览
 

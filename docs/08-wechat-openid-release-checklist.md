@@ -2,10 +2,12 @@
 
 ## 腾讯云和域名
 - [ ] 轻量应用服务器为 Ubuntu Server 24.04 LTS 64 位。
+- [ ] 24.04 LTS 不可用时，轻量应用服务器使用 Ubuntu Server 22.04 LTS 64 位。
 - [ ] 服务器地域在中国大陆，公网 IP 已绑定域名 A 记录。
 - [ ] ICP 备案已通过。
 - [ ] 防火墙只开放 80、443 和受限来源 SSH。
 - [ ] Caddy 已签发有效 HTTPS 证书。
+- [ ] HTTPS 已通过 TLS 1.2 或更高版本验证，TLS 1.0 和 1.1 已禁用。
 
 ## 后端环境
 - [ ] `NODE_ENV=production`。
@@ -35,7 +37,10 @@
 ## 备份和发布
 - [ ] `GET /health` 返回正常。
 - [ ] `node scripts/backup.js` 能生成备份。
+- [ ] 备份脚本使用 SQLite 一致性快照（`VACUUM INTO`），未直接复制 WAL 活跃状态下的主数据库文件。
 - [ ] 备份文件可以打开并读到成员、菜谱和饭局数据。
+- [ ] 已在测试或预发布环境完成一次备份恢复演练，恢复后可读写成员、菜谱和饭局数据。
+- [ ] 应用和 Caddy 日志中未出现 `WX_SECRET`、`session_key`、token 明文、`CHEF_BIND_CODE` 或 `FAMILY_INVITE_CODE`。
 - [ ] 关闭开发者工具域名跳过后真机可访问。
 - [ ] 体验版双账号联调完成。
 - [ ] 已提交审核并发布正式版。

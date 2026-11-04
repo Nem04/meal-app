@@ -18,7 +18,7 @@
 ## 技术路线
 - uni-app 官方 CLI 项目 `@dcloudio/uvm` 或 create-uni 模板（Vue3 + Vite + TypeScript/JS）。
 - 复用现有后端 REST API（`/api/meals`、`/recipes`、`/inventory`、`/members`、`/calendar`）。
-- 小程序内用 `wx.login`→ 测试号 code 换取临时身份；开发版先用「选择昵称」绑定。
+- 小程序内用 `wx.login` 获取一次性 code；服务端换取 openid 后，首次进入按主厨或家人角色输入显示名及对应绑定口令，之后自动登录。
 
 ## 目录约定
 ```
