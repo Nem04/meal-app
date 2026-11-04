@@ -14,6 +14,8 @@ process.env.SESSION_TTL_DAYS = '30';
 const { handle } = await import('../src/routes.js');
 const dbm = await import('../src/db.js');
 const { AppError } = await import('../src/errors.js');
+const repo = await import('../src/repo.js');
+const { hashSessionToken } = await import('../src/auth/session.js');
 
 let server;
 let baseUrl;
@@ -27,6 +29,21 @@ const fakeWechat = {
     return { openid: nextOpenid };
   },
 };
+
+function setName(memberId, name) {
+  repo.db().prepare('UPDATE family_member SET name = ? WHERE id = ?').run(name, memberId);
+}
+
+function mintSession(memberId) {
+  const token = `test-token-${memberId}-${Math.random().toString(36).slice(2)}`;
+  repo.createAuthSession({
+    tokenHash: hashSessionToken(token),
+    memberId,
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+  });
+  return token;
+}
 
 before(async () => {
   dbm.openDb();
@@ -120,4 +137,71 @@ test('健康检查不需要认证', async () => {
   const response = await fetch(`${baseUrl}/health`);
   assert.equal(response.status, 200);
   assert.equal((await response.json()).data.status, 'ok');
+});
+
+test('点菜提交使用会话成员，伪造 submitter 与 x-member-id 均被忽略', async () => {
+  setName('member-chef', '爸爸');
+  const chefToken = mintSession('member-chef');
+  const mealResp = await fetch(`${baseUrl}/meals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${chefToken}` },
+    body: JSON.stringify({ title: '今晚', meal_date: '2026-11-04' }),
+  });
+  assert.equal(mealResp.status, 201);
+  const meal = (await mealResp.json()).data;
+
+  setName('member-family', '妈妈');
+  const familyToken = mintSession('member-family');
+  const orderResp = await fetch(`${baseUrl}/meals/${meal.id}/items`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${familyToken}`,
+      'x-member-id': 'member-chef',
+    },
+    body: JSON.stringify({
+      recipe_version_id: 'recipe-seed-001-v1',
+      submitter: '伪造的人',
+      note: '少辣',
+    }),
+  });
+  assert.equal(orderResp.status, 201);
+  const order = (await orderResp.json()).data;
+  assert.equal(order.meal.items[0].submitter, '妈妈');
+  assert.equal(order.meal.submissions[0].member_name_snapshot, '妈妈');
+  assert.ok(!JSON.stringify(order).includes('伪造的人'));
+});
+
+test('库存变更使用会话主厨，伪造 operator 被忽略', async () => {
+  setName('member-chef', '爸爸');
+  const chefToken = mintSession('member-chef');
+  const resp = await fetch(`${baseUrl}/inventory`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${chefToken}` },
+    body: JSON.stringify({ name: '土豆', quantity: 2, unit: '个', operator: '伪造的人' }),
+  });
+  assert.equal(resp.status, 201);
+  const item = repo.listInventory().find((i) => i.canonical_name === '土豆');
+  assert.ok(item, '库存中应已记录土豆');
+  assert.equal(item.updated_by, '爸爸');
+  const log = repo.db().prepare('SELECT operator FROM inventory_log WHERE item_id = ?').get(item.id);
+  assert.equal(log.operator, '爸爸');
+});
+
+test('wechat 模式下仅 x-member-id 无法认证，伪造 x-member-id 不覆盖 Bearer', async () => {
+  const noToken = await fetch(`${baseUrl}/meals`, {
+    headers: { 'x-member-id': 'member-chef' },
+  });
+  assert.equal(noToken.status, 401);
+  assert.equal((await noToken.json()).data.code, 'UNAUTHORIZED');
+
+  setName('member-chef', '爸爸');
+  const chefToken = mintSession('member-chef');
+  const me = await fetch(`${baseUrl}/auth/me`, {
+    headers: { Authorization: `Bearer ${chefToken}`, 'x-member-id': 'member-family' },
+  });
+  assert.equal(me.status, 200);
+  const body = await me.json();
+  assert.equal(body.data.member.id, 'member-chef');
+  assert.equal(body.data.member.name, '爸爸');
 });
