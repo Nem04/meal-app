@@ -317,7 +317,9 @@ export async function loginWithWechat({ code, wechatClient, appConfig }) {
 }
 
 export function listBoundMembers() {
-  return repo.listBoundMembers();
+  // 服务层序列化边界：任何调用方拿到的都是脱敏后的成员视图，
+  // 不暴露 openid / bound_at / created_at 等字段。
+  return repo.listBoundMembers().map(serializeMember);
 }
 
 export async function bindWechatMember({

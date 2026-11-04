@@ -27,14 +27,15 @@
 ## 三、真机预览
 
 1. 手机和电脑连**同一个 WiFi**。
-2. 修改 `miniprogram/src/utils/index.js` 第一行：
+2. 修改 `miniprogram/src/utils/http.js` 中的 `DEV_BASE_URL`：
    ```js
-   export const BASE_URL = 'http://localhost:8080';
+   const DEV_BASE_URL = 'http://localhost:8080';
    ```
    改成电脑的局域网地址：
    ```js
-   export const BASE_URL = 'http://192.168.5.2:8080';
+   const DEV_BASE_URL = 'http://192.168.5.2:8080';
    ```
+   正式环境请改为 `https://api.<真实域名>`，并同步更新 `PROD_BASE_URL`；保持 `DEV_BASE_URL` / `PROD_BASE_URL` 两个常量。
 3. 在命令行重新编译到微信小程序：
    ```powershell
    cd D:\NemoFile\meal-app\miniprogram
