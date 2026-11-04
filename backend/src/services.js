@@ -103,18 +103,44 @@ export function getMealWithPrep(mealId) {
 function getMealDetail(id) {
   const meal = repo.getMeal(id);
   if (!meal) return null;
-  return { ...meal, items: repo.listMealItems(id) };
+  return {
+    ...meal,
+    items: repo.listMealItems(id),
+    submissions: repo.listMealSubmissions(id),
+  };
 }
 
-export function addMealItem({ meal_id, recipe_version_id, submitter = '家人', quantity = 1, note = '' }) {
+export function addMealItem({
+  meal_id,
+  recipe_version_id,
+  member = null,
+  submitter = '家人',
+  quantity = 1,
+  note = '',
+}) {
   const meal = repo.getMeal(meal_id);
-  if (!meal) throw new Error('这顿饭不存在');
-  if (meal.status !== 'open') throw new Error('这顿饭已经结束了');
-  if (!repo.getVersion(recipe_version_id)) throw new Error('菜谱版本不存在');
-  // 去重：同一顿饭里同一道菜只保留一行，重复点只更新备注。
-  repo.upsertMealItem(meal_id, recipe_version_id, submitter, Number(quantity) || 1, note);
-  const result = regeneratePrep(meal_id);
-  return { meal: getMealDetail(meal_id), prep: result };
+  if (!meal) throw new AppError(404, 'MEAL_NOT_FOUND', '这顿饭不存在');
+  if (meal.status !== 'open') throw new AppError(409, 'MEAL_CLOSED', '这顿饭已经结束了');
+  if (!repo.getVersion(recipe_version_id)) {
+    throw new AppError(404, 'RECIPE_VERSION_NOT_FOUND', '菜谱版本不存在');
+  }
+  const actorName = member ? member.name : submitter;
+  const actorId = member ? member.id : '';
+  const amount = Number(quantity) || 1;
+  if (actorId) {
+    repo.upsertMealItemWithSubmission({
+      mealId: meal_id,
+      versionId: recipe_version_id,
+      memberId: actorId,
+      memberName: actorName,
+      quantity: amount,
+      note,
+      submittedAt: new Date().toISOString(),
+    });
+  } else {
+    repo.upsertMealItem(meal_id, recipe_version_id, actorName, amount, note);
+  }
+  return { meal: getMealDetail(meal_id), prep: regeneratePrep(meal_id) };
 }
 
 export function regeneratePrep(mealId) {

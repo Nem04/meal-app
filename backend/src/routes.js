@@ -122,7 +122,6 @@ async function readBody(req) {
   if (!raw) return {};
   try { return JSON.parse(raw); } catch { return { _raw: raw }; }
 }
-function memberIdOf(req) { return req.headers['x-member-id'] || ''; }
 
 async function handleMeals(method, seg, req, res, q) {
   const id = seg[1];
@@ -135,10 +134,13 @@ async function handleMeals(method, seg, req, res, q) {
   }
   if (id && method === 'GET') return ok(res, svc.getMealWithPrep(id));
   if (id && seg[2] === 'items' && method === 'POST') {
-    const b = await readBody(req);
-    const caller = svc.identifyMemberById(memberIdOf(req));
-    if (!caller) throw new Error('请先选择我是谁');
-    return created(res, svc.addMealItem({ ...b, meal_id: id, submitter: caller.name }));
+    const body = await readBody(req);
+    return created(res, svc.addMealItem({
+      ...body,
+      meal_id: id,
+      member: req.member,
+      submitter: req.member.name,
+    }));
   }
   if (id && seg[2] === 'prep' && method === 'GET') return ok(res, svc.listPrep(id));
   if (id && seg[2] === 'prep' && seg[3] && method === 'PATCH') {
@@ -198,20 +200,20 @@ async function handleInventory(method, seg, req, res, q) {
   if (seg[1] === 'bulk' && method === 'POST') {
     const b = await readBody(req);
     guardChef(req);
-    return created(res, svc.bulkAddInventory(b.text || '', b.operator || ''));
+    return created(res, svc.bulkAddInventory(b.text || '', req.member.name));
   }
   if (!id && method === 'POST') {
     const b = await readBody(req);
     guardChef(req);
-    return created(res, svc.inventoryAdd({ ...b, operator: b.operator || '手动录入' }));
+    return created(res, svc.inventoryAdd({ ...b, operator: req.member.name }));
   }
   if (id && method === 'DELETE') { guardChef(req); return ok(res, svc.deleteInventory(id)); }
   if (id && method === 'PATCH') { guardChef(req);
     const b = await readBody(req);
     const op = b.op || q.get('op') || 'stocktake';
-    if (op === 'subtract') return ok(res, svc.inventorySubtract({ ...b, id }));
-    if (op === 'stocktake') return ok(res, svc.inventoryStocktake({ ...b, id }));
-    return ok(res, svc.inventoryAdd({ ...b, operator: b.operator || '手动' }));
+    if (op === 'subtract') return ok(res, svc.inventorySubtract({ ...b, id, operator: req.member.name }));
+    if (op === 'stocktake') return ok(res, svc.inventoryStocktake({ ...b, id, operator: req.member.name }));
+    return ok(res, svc.inventoryAdd({ ...b, operator: req.member.name }));
   }
   fail(res, 404, '没有这个库存接口');
 }
