@@ -7,7 +7,7 @@ export class ApiError extends Error {
   }
 }
 
-const DEV_BASE_URL = 'http://localhost:8080';
+const DEV_BASE_URL = 'http://192.168.5.2:8080';
 const PROD_BASE_URL = 'https://api.example.com';
 
 // Node 测试环境中 import.meta.env 为 undefined，使用可选链兜底；
