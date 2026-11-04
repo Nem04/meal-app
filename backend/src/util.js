@@ -20,13 +20,13 @@ export function json(res, status, data) {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   });
   res.end(body);
 }
 
 export function ok(res, data) { json(res, 200, data ?? null); }
 export function created(res, data) { json(res, 201, data ?? null); }
-export function fail(res, status, message) {
-  json(res, status, { error: message });
+export function fail(res, status, message, code = 'BAD_REQUEST') {
+  json(res, status, { error: message, code });
 }

@@ -1,12 +1,13 @@
 ﻿import { createServer } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { URL } from 'node:url';
-import { config } from './config.js';
+import { config, validateAuthConfig } from './config.js';
 import { openDb } from './db.js';
 import { handle } from './routes.js';
 import { serveStatic } from './http.js';
 import { fail } from './util.js';
 
+validateAuthConfig(config);
 openDb();
 
 const server = createServer((req, res) => {
@@ -17,7 +18,7 @@ const server = createServer((req, res) => {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     });
     res.end();
     return;
