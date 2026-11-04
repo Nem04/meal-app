@@ -10,3 +10,9 @@ patch_front.js
 runtime/node.exe
 launch-test.log
 launch-test.err.log
+hidden-test.log
+hidden-test.err.log
+autostart-test.log
+autostart-test.err.log
+winget-node.out.log
+winget-node.err.log
