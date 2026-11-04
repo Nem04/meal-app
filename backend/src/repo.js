@@ -1,5 +1,6 @@
 // 数据访问层：薄封装 SQLite 读写。业务逻辑不放这里。
 import { openDb } from './db.js';
+import { AppError } from './errors.js';
 
 export function db() { return openDb(); }
 
@@ -295,4 +296,103 @@ export function upsertMemberByName(name, role, color) {
   d.prepare('INSERT INTO family_member(id,name,role,color,openid,created_at) VALUES(?,?,?,?,NULL,?)')
     .run(id, name, role, color, t);
   return id;
+}
+
+export function getMemberByOpenid(openid) {
+  return db().prepare('SELECT * FROM family_member WHERE openid = ?').get(openid);
+}
+
+export function bindMemberSlot({ openid, memberId, name, boundAt }) {
+  const d = db();
+  d.exec('BEGIN IMMEDIATE');
+  try {
+    const member = d.prepare('SELECT * FROM family_member WHERE id = ?').get(memberId);
+    if (!member) throw new AppError(404, 'MEMBER_NOT_FOUND', '成员槽位不存在');
+    if (member.openid) throw new AppError(409, 'MEMBER_ALREADY_BOUND', '这个成员槽位已经绑定');
+    const other = d.prepare(
+      'SELECT id FROM family_member WHERE openid = ? AND id <> ?',
+    ).get(openid, memberId);
+    if (other) throw new AppError(409, 'OPENID_ALREADY_BOUND', '这个微信已经绑定其他成员');
+    d.prepare(
+      'UPDATE family_member SET openid = ?, name = ?, bound_at = ? WHERE id = ?',
+    ).run(openid, name, boundAt, memberId);
+    d.exec('COMMIT');
+    return d.prepare('SELECT * FROM family_member WHERE id = ?').get(memberId);
+  } catch (error) {
+    d.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+export function createAuthSession({ tokenHash, memberId, createdAt, expiresAt }) {
+  db().prepare(
+    'INSERT INTO auth_session(token_hash, member_id, created_at, expires_at, last_seen_at) VALUES(?,?,?,?,?)',
+  ).run(tokenHash, memberId, createdAt, expiresAt, createdAt);
+}
+
+export function getAuthSessionByHash(tokenHash) {
+  return db().prepare('SELECT * FROM auth_session WHERE token_hash = ?').get(tokenHash);
+}
+
+export function touchAuthSession(tokenHash, lastSeenAt) {
+  db().prepare('UPDATE auth_session SET last_seen_at = ? WHERE token_hash = ?')
+    .run(lastSeenAt, tokenHash);
+}
+
+export function deleteAuthSession(tokenHash) {
+  return db().prepare('DELETE FROM auth_session WHERE token_hash = ?').run(tokenHash).changes;
+}
+
+export function deleteExpiredSessions(nowIso) {
+  return db().prepare('DELETE FROM auth_session WHERE expires_at <= ?').run(nowIso).changes;
+}
+
+export function upsertMealSubmission({
+  mealId, versionId, memberId, memberName, quantity, note, submittedAt,
+}) {
+  const d = db();
+  const existing = d.prepare(
+    'SELECT id FROM meal_item_submission WHERE meal_id = ? AND recipe_version_id = ? AND member_id = ?',
+  ).get(mealId, versionId, memberId);
+  if (existing) {
+    d.prepare(
+      'UPDATE meal_item_submission SET member_name_snapshot = ?, quantity = ?, note = ?, submitted_at = ? WHERE id = ?',
+    ).run(memberName, quantity, note, submittedAt, existing.id);
+    return existing.id;
+  }
+  const id = newId();
+  d.prepare(
+    'INSERT INTO meal_item_submission(id, meal_id, recipe_version_id, member_id, member_name_snapshot, quantity, note, submitted_at) VALUES(?,?,?,?,?,?,?,?)',
+  ).run(id, mealId, versionId, memberId, memberName, quantity, note, submittedAt);
+  return id;
+}
+
+export function listMealSubmissions(mealId) {
+  return db().prepare(
+    'SELECT id, meal_id, recipe_version_id, member_id, member_name_snapshot, quantity, note, submitted_at FROM meal_item_submission WHERE meal_id = ? ORDER BY submitted_at ASC',
+  ).all(mealId);
+}
+
+export function upsertMealItemWithSubmission({
+  mealId, versionId, memberId, memberName, quantity, note, submittedAt,
+}) {
+  const d = db();
+  d.exec('BEGIN IMMEDIATE');
+  try {
+    const itemId = upsertMealItem(mealId, versionId, memberName, quantity, note);
+    upsertMealSubmission({
+      mealId,
+      versionId,
+      memberId,
+      memberName,
+      quantity,
+      note,
+      submittedAt,
+    });
+    d.exec('COMMIT');
+    return itemId;
+  } catch (error) {
+    d.exec('ROLLBACK');
+    throw error;
+  }
 }

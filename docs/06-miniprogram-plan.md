@@ -12,13 +12,13 @@
 
 ## 明确「本阶段不做」
 - 不买域名、不备案、不配 HTTPS、不上云（第二步再做）。
-- 不做微信 openid 真实登录绑定，先用网页版现有的「昵称+角色」模型过渡（表已预留 openid 字段）。
+- 微信 openid 真实登录、绑定与正式上线已纳入 [openid 登录绑定与正式上线设计](superpowers/specs/2026-11-04-wechat-openid-auth-deploy-design.md) 和 [实施计划](superpowers/plans/2026-11-04-wechat-openid-auth-deploy.md)。
 - 不做支付、分享、订阅消息。
 
 ## 技术路线
 - uni-app 官方 CLI 项目 `@dcloudio/uvm` 或 create-uni 模板（Vue3 + Vite + TypeScript/JS）。
 - 复用现有后端 REST API（`/api/meals`、`/recipes`、`/inventory`、`/members`、`/calendar`）。
-- 小程序内用 `wx.login`→ 测试号 code 换取临时身份；开发版先用「选择昵称」绑定。
+- 小程序内用 `wx.login` 获取一次性 code；服务端换取 openid 后，首次进入按主厨或家人角色输入显示名及对应绑定口令，之后自动登录。
 
 ## 目录约定
 ```

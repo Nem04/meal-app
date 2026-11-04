@@ -19,7 +19,8 @@ body{
 /* topbar */
 .topbar{background:var(--bg); padding:14px 16px 4px;}
 .topbar-inner{max-width:520px; margin:0 auto;}
-.greet{font-size:13px; color:var(--ink2);}
+.greet{font-size:13px; color:var(--ink2); display:flex; align-items:center; gap:6px;}
+.role-chip{background:#EAF2E7; color:#4F7A4E; font-size:11px; line-height:1.4; padding:1px 7px; border-radius:999px;}
 .app-title{font-size:24px; font-weight:800; letter-spacing:.5px;}
 
 /* main */
