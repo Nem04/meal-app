@@ -3,6 +3,10 @@ import * as repo from './repo.js';
 import { mergeIngredients } from './domain/merge.js';
 import { parseInventoryText } from './domain/parseInventory.js';
 import { canonicalName, normalizeUnit } from './domain/canonical.js';
+import { AppError } from './errors.js';
+import { verifyBindCode } from './auth/passcode.js';
+import { hashSessionToken, newSessionToken, sessionExpiresAt } from './auth/session.js';
+import { createAttemptLimiter } from './auth/rateLimit.js';
 
 // ---------- 菜品 / 菜谱 ----------
 export function listRecipes(category) {
@@ -241,14 +245,97 @@ export function identifyMember(name) {
   return repo.getMemberById(id);
 }
 
+const MEMBER_SLOTS = { chef: 'member-chef', family: 'member-family' };
+const defaultBindLimiter = createAttemptLimiter();
+
+export function serializeMember(member) {
+  return { id: member.id, name: member.name, role: member.role, color: member.color };
+}
+
+function normalizeDisplayName(value) {
+  const name = String(value || '').trim();
+  if (!name || [...name].length > 20) {
+    throw new AppError(400, 'INVALID_DISPLAY_NAME', '显示名需为 1 到 20 个字符');
+  }
+  return name;
+}
+
+function issueSession(member, ttlDays) {
+  const token = newSessionToken();
+  const tokenHash = hashSessionToken(token);
+  const createdAt = new Date().toISOString();
+  const expiresAt = sessionExpiresAt(ttlDays);
+  repo.deleteExpiredSessions(createdAt);
+  repo.createAuthSession({ tokenHash, memberId: member.id, createdAt, expiresAt });
+  return { status: 'bound', token, expiresAt, member: serializeMember(member) };
+}
+
+export async function loginWithWechat({ code, wechatClient, appConfig }) {
+  const { openid } = await wechatClient.exchangeCode(code);
+  const member = repo.getMemberByOpenid(openid);
+  if (!member) return { status: 'needs_binding' };
+  return issueSession(member, appConfig.sessionTtlDays);
+}
+
+export async function bindWechatMember({
+  code,
+  kind,
+  inviteCode,
+  displayName,
+  wechatClient,
+  appConfig,
+  attemptLimiter = defaultBindLimiter,
+  attemptKeyPrefix = 'unknown',
+}) {
+  const { openid } = await wechatClient.exchangeCode(code);
+  const attemptKey = `${attemptKeyPrefix}:${openid}:${kind}`;
+  attemptLimiter.assertAllowed(attemptKey);
+  try {
+    verifyBindCode(kind, inviteCode, appConfig);
+  } catch (error) {
+    if (error.code === 'INVALID_INVITE_CODE') attemptLimiter.recordFailure(attemptKey);
+    throw error;
+  }
+  const member = repo.bindMemberSlot({
+    openid,
+    memberId: MEMBER_SLOTS[kind],
+    name: normalizeDisplayName(displayName),
+    boundAt: new Date().toISOString(),
+  });
+  attemptLimiter.clear(attemptKey);
+  return issueSession(member, appConfig.sessionTtlDays);
+}
+
+export function authenticateToken(token) {
+  if (!token) throw new AppError(401, 'UNAUTHORIZED', '请先登录');
+  const tokenHash = hashSessionToken(token);
+  const session = repo.getAuthSessionByHash(tokenHash);
+  if (!session) throw new AppError(401, 'UNAUTHORIZED', '登录已失效');
+  if (Date.parse(session.expires_at) <= Date.now()) {
+    repo.deleteAuthSession(tokenHash);
+    throw new AppError(401, 'UNAUTHORIZED', '登录已过期');
+  }
+  const member = repo.getMemberById(session.member_id);
+  if (!member) throw new AppError(401, 'UNAUTHORIZED', '成员不存在');
+  repo.touchAuthSession(tokenHash, new Date().toISOString());
+  return { member, session };
+}
+
+export function logoutToken(token) {
+  if (token) repo.deleteAuthSession(hashSessionToken(token));
+}
+
 export function isChef(memberId) {
   const m = repo.getMemberById(memberId);
   return !!m && m.role === 'chef';
 }
 
-export function guardChef(memberId, action = '该操作') {
-  if (!isChef(memberId)) {
-    throw new Error(`${action}只有主厨才能做`);
+export function guardChef(memberOrId, action = '该操作') {
+  const member = typeof memberOrId === 'string'
+    ? repo.getMemberById(memberOrId)
+    : memberOrId;
+  if (!member || member.role !== 'chef') {
+    throw new AppError(403, 'CHEF_ONLY', `${action}只有主厨才能做`);
   }
 }
 
