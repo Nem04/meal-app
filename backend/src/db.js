@@ -27,6 +27,7 @@ export function openDb() {
 
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(schema);
+  migrate(db);
 
   const seedCount = db.prepare('SELECT COUNT(*) AS n FROM recipe').get().n;
   if (seedCount === 0) seed(db);
@@ -41,6 +42,13 @@ export function closeDbForTest() {
   if (db) {
     db.close();
     db = null;
+  }
+}
+
+function migrate(database) {
+  const columns = database.prepare('PRAGMA table_info(family_member)').all();
+  if (!columns.some((column) => column.name === 'bound_at')) {
+    database.exec('ALTER TABLE family_member ADD COLUMN bound_at TEXT;');
   }
 }
 
