@@ -12,7 +12,7 @@
 
 ## 明确「本阶段不做」
 - 不买域名、不备案、不配 HTTPS、不上云（第二步再做）。
-- 本期不做微信 openid 真实登录绑定；首次进入仍用「昵称+角色」模型过渡，选定后不在页面提供切换。后续接入微信登录后，由服务端根据 openid 绑定成员并判定是否为主厨（表已预留 openid 字段）。
+- 微信 openid 真实登录、绑定与正式上线已纳入 [openid 登录绑定与正式上线设计](superpowers/specs/2026-11-04-wechat-openid-auth-deploy-design.md) 和 [实施计划](superpowers/plans/2026-11-04-wechat-openid-auth-deploy.md)。
 - 不做支付、分享、订阅消息。
 
 ## 技术路线

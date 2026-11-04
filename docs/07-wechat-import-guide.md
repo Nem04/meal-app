@@ -53,6 +53,13 @@ npm run build:mp-weixin # 生产构建（会自动生成 dist/build/mp-weixin）
 > `C:\Program Files\nodejs\npm.cmd`，或先执行
 > `$env:Path += ";C:\Program Files\nodejs"`。
 
+## 正式环境
+
+- 使用正式 AppID，不要把 AppSecret 写入小程序。
+- request 合法域名必须是 `https://api.<域名>`。
+- 正式构建必须设置 `urlCheck: true`。
+- 首次进入按角色输入主厨口令或家庭邀请码。
+
 ## 五、接下来（第二步，可选再做）
 
 - 购买域名 → 备案 → 上云服务器 → 配 HTTPS → 微信后台绑定合法域名 → 插入 AppID → 提交审核正式发布。
