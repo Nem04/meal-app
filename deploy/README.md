@@ -1,6 +1,12 @@
 # 腾讯云部署
 
-> **部署前必须替换占位值**：`DOMAIN` 需替换为已完成 ICP 备案并解析到腾讯云的真实域名；`miniprogram/src/manifest.json` 与 `deploy/.env.production` 中的 AppID 需替换为真实小程序 AppID；`deploy/.env.production` 中的 `WX_SECRET` 需替换为真实密钥；`CHEF_BIND_CODE` 与 `FAMILY_INVITE_CODE` 需替换为各至少 12 个字符的随机口令。`WX_SECRET` 只能写入服务器上被 `.gitignore` 忽略的 `deploy/.env.production`，严禁提交到 Git 或放入 Caddy 容器。
+> **部署前必须替换占位值（fail-closed）**：`DOMAIN` 需替换为已完成 ICP 备案并解析到腾讯云的真实域名；`miniprogram/src/manifest.json` 与 `deploy/.env.production` 中的 AppID 需替换为真实小程序 AppID；`deploy/.env.production` 中的 `WX_SECRET` 需替换为真实密钥；`CHEF_BIND_CODE` 与 `FAMILY_INVITE_CODE` 需替换为各至少 12 个字符的随机口令。`WX_SECRET` 只能写入服务器上被 `.gitignore` 忽略的 `deploy/.env.production`，严禁提交到 Git 或放入 Caddy 容器。
+
+占位值未替换时，系统会**拒绝上线**（fail-closed），不会带着公开默认口令或示例地址运行：
+
+- 后端启动校验：`WX_APPID`、`WX_SECRET`、`CHEF_BIND_CODE`、`FAMILY_INVITE_CODE` 为空、仍以 `replace-with-` 开头，或绑定口令不足 12 个字符时，后端**拒绝启动**。
+- `DOMAIN` 仍为 `api.example.com` 时无法签发有效 HTTPS 证书，需替换为已完成 ICP 备案的真实域名。
+- 小程序生产请求地址仍为 `miniprogram/src/utils/http.js` 中的 `https://api.example.com` 时，需改为 `https://api.<真实域名>` 后再执行 `build:mp-weixin`，否则真机无法访问后端。
 
 ## 部署前：开通防火墙 / 安全组
 

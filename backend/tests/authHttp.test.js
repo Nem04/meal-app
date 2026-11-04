@@ -205,3 +205,18 @@ test('wechat 模式下仅 x-member-id 无法认证，伪造 x-member-id 不覆�
   assert.equal(body.data.member.id, 'member-chef');
   assert.equal(body.data.member.name, '爸爸');
 });
+
+test('日历接口返回 year 与 month，匹配请求参数', async () => {
+  setName('member-chef', '爸爸');
+  const chefToken = mintSession('member-chef');
+
+  const response = await fetch(`${baseUrl}/calendar?year=2026&month=11`, {
+    headers: { Authorization: `Bearer ${chefToken}` },
+  });
+  assert.equal(response.status, 200);
+
+  const body = await response.json();
+  assert.equal(body.data.year, 2026);
+  assert.equal(body.data.month, 11);
+  assert.ok(Array.isArray(body.data.days), 'days 应为数组');
+});

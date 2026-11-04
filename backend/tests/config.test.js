@@ -34,6 +34,28 @@ test('绑定口令至少 12 个字符', () => {
   );
 });
 
+test('拒绝未替换的占位口令', () => {
+  assert.throws(
+    () => validateAuthConfig({ ...valid, chefBindCode: 'replace-with-a-random-chef-code' }),
+    /占位/,
+  );
+  assert.throws(
+    () => validateAuthConfig({ ...valid, familyInviteCode: 'replace-with-a-random-family-code' }),
+    /占位/,
+  );
+});
+
+test('拒绝未替换的占位 AppID 与密钥', () => {
+  assert.throws(
+    () => validateAuthConfig({ ...valid, wxAppId: 'replace-with-wechat-appid' }),
+    /占位/,
+  );
+  assert.throws(
+    () => validateAuthConfig({ ...valid, wxSecret: 'replace-with-wechat-secret' }),
+    /占位/,
+  );
+});
+
 test('微信模式不得同时启用旧家庭口令', () => {
   assert.throws(
     () => validateAuthConfig({ ...valid, passcode: 'legacy-passcode' }),

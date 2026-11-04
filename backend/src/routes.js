@@ -60,12 +60,9 @@ export async function handle(req, res, url, deps = {}) {
     }
     if (path === '/calendar' && method === 'GET') {
       requireIdentity(req);
-      return ok(res, {
-        days: svc.calendarMonth(
-          Number(q.get('year') || new Date().getFullYear()),
-          Number(q.get('month') || new Date().getMonth() + 1),
-        ),
-      });
+      const year = Number(q.get('year') || new Date().getFullYear());
+      const month = Number(q.get('month') || new Date().getMonth() + 1);
+      return ok(res, { days: svc.calendarMonth(year, month), year, month });
     }
     fail(res, 404, '没有这个接口');
   } catch (error) {

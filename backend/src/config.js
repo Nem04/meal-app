@@ -14,6 +14,10 @@ export const config = {
   sessionTtlDays: Number(env.SESSION_TTL_DAYS || 30),
 };
 
+function isPlaceholder(value) {
+  return /^replace-with-/i.test((value || '').trim());
+}
+
 export function validateAuthConfig(value = config) {
   if (value.nodeEnv === 'production' && value.authMode !== 'wechat') {
     throw new Error('生产环境必须使用 AUTH_MODE=wechat');
@@ -32,6 +36,10 @@ export function validateAuthConfig(value = config) {
   const missing = required.filter(([, item]) => !item).map(([key]) => key);
   if (missing.length) {
     throw new Error(`微信登录缺少配置：${missing.join(', ')}`);
+  }
+  const placeholders = required.filter(([, item]) => isPlaceholder(item)).map(([key]) => key);
+  if (placeholders.length) {
+    throw new Error(`检测到未替换的占位配置：${placeholders.join(', ')}`);
   }
   if (value.chefBindCode.length < 12) {
     throw new Error('CHEF_BIND_CODE 至少需要 12 个字符');
