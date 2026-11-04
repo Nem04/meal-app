@@ -220,3 +220,44 @@ test('日历接口返回 year 与 month，匹配请求参数', async () => {
   assert.equal(body.data.month, 11);
   assert.ok(Array.isArray(body.data.days), 'days 应为数组');
 });
+
+test('多个微信可用同一个主厨码绑定，成员列表只返回已绑定成员', async () => {
+  const names = ['主厨甲', '主厨乙'];
+  const tokens = [];
+  for (let i = 0; i < names.length; i += 1) {
+    nextOpenid = `openid-chef-${i}`;
+    const login = await fetch(`${baseUrl}/auth/wechat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'good-code' }),
+    });
+    assert.equal((await login.json()).data.status, 'needs_binding');
+
+    const bind = await fetch(`${baseUrl}/auth/bind`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: 'good-code',
+        kind: 'chef',
+        inviteCode: 'chef-code-12345',
+        displayName: names[i],
+      }),
+    });
+    const body = await bind.json();
+    assert.equal(body.data.member.role, 'chef');
+    tokens.push(body.data.token);
+  }
+
+  const members = await fetch(`${baseUrl}/members`, {
+    headers: { Authorization: `Bearer ${tokens[0]}` },
+  });
+  const body = await members.json();
+  const matching = body.data.filter((m) => names.includes(m.name));
+  assert.equal(matching.length, 2);
+  assert.deepEqual(matching.map((m) => m.name).sort(), ['主厨乙', '主厨甲'].sort());
+  assert.ok(matching.every((m) => m.role === 'chef'));
+  assert.ok(
+    body.data.every((m) => m.id !== 'member-chef' && m.id !== 'member-family'),
+    '成员列表只应返回已绑定成员，不应包含未绑定种子槽位',
+  );
+});

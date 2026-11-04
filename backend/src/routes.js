@@ -217,7 +217,10 @@ async function handleInventory(method, seg, req, res, q) {
 
 async function handleMembers(method, seg, req, res, q) {
   if (method === 'GET') {
-    return ok(res, svc.listMembers().map(svc.serializeMember));
+    const members = config.authMode === 'wechat'
+      ? svc.listBoundMembers()
+      : svc.listMembers();
+    return ok(res, members.map(svc.serializeMember));
   }
   if (method === 'POST' && config.authMode === 'legacy') {
     const body = await readBody(req);
