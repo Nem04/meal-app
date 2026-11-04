@@ -275,7 +275,16 @@ export function identifyMember(name) {
   return repo.getMemberById(id);
 }
 
-const MEMBER_SLOTS = { chef: 'member-chef', family: 'member-family' };
+const ROLE_BY_KIND = {
+  chef: 'chef',
+  family: 'member',
+};
+
+const COLOR_BY_ROLE = {
+  chef: '#D96A3B',
+  member: '#5B8C5A',
+};
+
 const defaultBindLimiter = createAttemptLimiter();
 
 export function serializeMember(member) {
@@ -307,6 +316,10 @@ export async function loginWithWechat({ code, wechatClient, appConfig }) {
   return issueSession(member, appConfig.sessionTtlDays);
 }
 
+export function listBoundMembers() {
+  return repo.listBoundMembers();
+}
+
 export async function bindWechatMember({
   code,
   kind,
@@ -326,10 +339,12 @@ export async function bindWechatMember({
     if (error.code === 'INVALID_INVITE_CODE') attemptLimiter.recordFailure(attemptKey);
     throw error;
   }
-  const member = repo.bindMemberSlot({
+  const role = ROLE_BY_KIND[kind];
+  const member = repo.bindMemberAccount({
     openid,
-    memberId: MEMBER_SLOTS[kind],
+    role,
     name: normalizeDisplayName(displayName),
+    color: COLOR_BY_ROLE[role],
     boundAt: new Date().toISOString(),
   });
   attemptLimiter.clear(attemptKey);

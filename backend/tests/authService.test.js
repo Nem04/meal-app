@@ -51,7 +51,8 @@ test('正确主厨口令绑定主厨并签发会话', async () => {
   assert.equal(result.member.role, 'chef');
   assert.equal(result.member.name, '爸爸');
   assert.ok(result.token);
-  assert.equal(repo.getMemberByOpenid('openid-chef').id, 'member-chef');
+  assert.equal(repo.getMemberByOpenid('openid-chef').role, 'chef');
+  assert.equal(repo.getMemberByOpenid('openid-chef').name, '爸爸');
 });
 
 test('错误家人邀请码被拒绝', async () => {
@@ -78,7 +79,8 @@ test('token 可鉴权，注销后立即失效', async () => {
     appConfig,
   });
   const auth = svc.authenticateToken(result.token);
-  assert.equal(auth.member.id, 'member-family');
+  assert.equal(auth.member.role, 'member');
+  assert.equal(repo.getMemberByOpenid('openid-family').id, auth.member.id);
   svc.logoutToken(result.token);
   assert.throws(() => svc.authenticateToken(result.token));
 });
@@ -110,6 +112,75 @@ test('微信客户端解析 openid 且不返回 session_key', async () => {
     }),
   });
   assert.deepEqual(await client.exchangeCode('code-1'), { openid: 'openid-from-wechat' });
+});
+
+test('多个微信使用同一个主厨码都成为主厨', async () => {
+  const members = [];
+  for (const [openid, name] of [
+    ['openid-chef-a', '爸爸'],
+    ['openid-chef-b', '爷爷'],
+    ['openid-chef-c', '叔叔'],
+  ]) {
+    const result = await svc.bindWechatMember({
+      code: 'good-code',
+      kind: 'chef',
+      inviteCode: 'chef-code-12345',
+      displayName: name,
+      wechatClient: fakeWechat(openid),
+      appConfig,
+    });
+    members.push(result.member);
+  }
+
+  assert.equal(new Set(members.map((m) => m.id)).size, 3);
+  assert.ok(members.every((m) => m.role === 'chef'));
+  assert.equal(svc.listBoundMembers().filter((m) => m.role === 'chef').length, 3);
+});
+
+test('多个微信使用同一个家人码都成为家人', async () => {
+  const members = [];
+  for (const [openid, name] of [
+    ['openid-family-a', '妈妈'],
+    ['openid-family-b', '奶奶'],
+  ]) {
+    const result = await svc.bindWechatMember({
+      code: 'good-code',
+      kind: 'family',
+      inviteCode: 'family-code-123',
+      displayName: name,
+      wechatClient: fakeWechat(openid),
+      appConfig,
+    });
+    members.push(result.member);
+  }
+
+  assert.equal(new Set(members.map((m) => m.id)).size, 2);
+  assert.ok(members.every((m) => m.role === 'member'));
+});
+
+test('同一个微信重复绑定被拒绝且不新增成员', async () => {
+  await svc.bindWechatMember({
+    code: 'good-code',
+    kind: 'family',
+    inviteCode: 'family-code-123',
+    displayName: '妈妈',
+    wechatClient: fakeWechat('openid-repeat'),
+    appConfig,
+  });
+
+  const before = svc.listBoundMembers().length;
+  await assert.rejects(
+    () => svc.bindWechatMember({
+      code: 'good-code',
+      kind: 'chef',
+      inviteCode: 'chef-code-12345',
+      displayName: '另一个人',
+      wechatClient: fakeWechat('openid-repeat'),
+      appConfig,
+    }),
+    (error) => error.code === 'OPENID_ALREADY_BOUND',
+  );
+  assert.equal(svc.listBoundMembers().length, before);
 });
 
 test('绑定失败达到 5 次后触发限流，窗口结束后恢复', async () => {
