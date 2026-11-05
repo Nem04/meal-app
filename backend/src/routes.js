@@ -97,6 +97,17 @@ async function handleAuth(method, seg, req, res, wechatClient) {
       attemptKeyPrefix: req.socket.remoteAddress || 'unknown',
     }));
   }
+  if (seg[1] === 'change-role' && method === 'POST') {
+    const member = requireIdentity(req);
+    const body = await readBody(req);
+    return ok(res, svc.changeMemberRole({
+      member,
+      kind: body.kind,
+      inviteCode: body.inviteCode,
+      appConfig,
+      attemptKeyPrefix: req.socket.remoteAddress || 'unknown',
+    }));
+  }
   if (seg[1] === 'me' && method === 'GET') {
     const member = requireIdentity(req);
     return ok(res, {
@@ -217,7 +228,10 @@ async function handleInventory(method, seg, req, res, q) {
 
 async function handleMembers(method, seg, req, res, q) {
   if (method === 'GET') {
-    return ok(res, svc.listMembers().map(svc.serializeMember));
+    const members = config.authMode === 'wechat'
+      ? svc.listBoundMembers()
+      : svc.listMembers();
+    return ok(res, members.map(svc.serializeMember));
   }
   if (method === 'POST' && config.authMode === 'legacy') {
     const body = await readBody(req);

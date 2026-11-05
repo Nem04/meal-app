@@ -324,6 +324,57 @@ export function bindMemberSlot({ openid, memberId, name, boundAt }) {
   }
 }
 
+export function bindMemberAccount({ openid, role, name, color, boundAt }) {
+  const d = db();
+  d.exec('BEGIN IMMEDIATE');
+  try {
+    const existing = d.prepare('SELECT * FROM family_member WHERE openid = ?').get(openid);
+    if (existing) {
+      throw new AppError(409, 'OPENID_ALREADY_BOUND', '这个微信已经绑定家庭成员');
+    }
+    const id = newId();
+    const createdAt = new Date().toISOString();
+    d.prepare(
+      'INSERT INTO family_member(id,name,role,color,openid,bound_at,created_at) VALUES(?,?,?,?,?,?,?)',
+    ).run(id, name, role, color, openid, boundAt, createdAt);
+    d.exec('COMMIT');
+    return d.prepare('SELECT * FROM family_member WHERE id = ?').get(id);
+  } catch (error) {
+    d.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+export function listBoundMembers() {
+  return db().prepare(
+    'SELECT * FROM family_member WHERE openid IS NOT NULL ORDER BY role DESC, created_at ASC',
+  ).all();
+}
+
+export function changeMemberRole({ memberId, role, color }) {
+  const d = db();
+  d.exec('BEGIN IMMEDIATE');
+  try {
+    const member = d.prepare('SELECT * FROM family_member WHERE id = ?').get(memberId);
+    if (!member) throw new AppError(404, 'MEMBER_NOT_FOUND', '成员不存在');
+    if (member.role === 'chef' && role === 'member') {
+      const chefCount = d.prepare(
+        "SELECT COUNT(*) AS n FROM family_member WHERE role = 'chef' AND openid IS NOT NULL",
+      ).get().n;
+      if (chefCount <= 1) {
+        throw new AppError(409, 'LAST_CHEF_REQUIRED', '至少需要保留一名主厨');
+      }
+    }
+    d.prepare('UPDATE family_member SET role = ?, color = ? WHERE id = ?')
+      .run(role, color, memberId);
+    d.exec('COMMIT');
+    return d.prepare('SELECT * FROM family_member WHERE id = ?').get(memberId);
+  } catch (error) {
+    d.exec('ROLLBACK');
+    throw error;
+  }
+}
+
 export function createAuthSession({ tokenHash, memberId, createdAt, expiresAt }) {
   db().prepare(
     'INSERT INTO auth_session(token_hash, member_id, created_at, expires_at, last_seen_at) VALUES(?,?,?,?,?)',

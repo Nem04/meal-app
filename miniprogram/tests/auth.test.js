@@ -78,6 +78,66 @@ test('已有 token 时 ensureLogin 不重复请求微信登录', async () => {
   assert.equal(loginCalls, 0);
 });
 
+test('调整角色后更新本地成员缓存并保留 token', async () => {
+  auth.setAuthForTest('token-role', {
+    id: 'member-role',
+    name: '妈妈',
+    role: 'member',
+    color: '#5B8C5A',
+  });
+  requestResponses.push({
+    statusCode: 200,
+    data: {
+      ok: true,
+      data: {
+        id: 'member-role',
+        name: '妈妈',
+        role: 'chef',
+        color: '#D96A3B',
+      },
+    },
+  });
+
+  const member = await auth.changeRole({
+    kind: 'chef',
+    inviteCode: 'chef-code-12345',
+  });
+
+  assert.equal(member.role, 'chef');
+  assert.equal(auth.getTokenValue(), 'token-role');
+  assert.equal(auth.getMember().role, 'chef');
+});
+
+test('刷新当前成员可以同步其他设备上的角色变化', async () => {
+  auth.setAuthForTest('token-refresh', {
+    id: 'member-refresh',
+    name: '爸爸',
+    role: 'chef',
+    color: '#D96A3B',
+  });
+  requestResponses.push({
+    statusCode: 200,
+    data: {
+      ok: true,
+      data: {
+        member: {
+          id: 'member-refresh',
+          name: '爸爸',
+          role: 'member',
+          color: '#5B8C5A',
+        },
+        expiresAt: '2026-12-05T00:00:00.000Z',
+      },
+    },
+  });
+
+  const member = await auth.refreshMember();
+
+  assert.equal(member.role, 'member');
+  assert.equal(auth.getTokenValue(), 'token-refresh');
+  assert.equal(auth.getMember().role, 'member');
+});
+
 test('正确绑定后保存成员并返回成员信息', async () => {
   let requestBody;
   globalThis.uni.request = ({ data, success }) => {

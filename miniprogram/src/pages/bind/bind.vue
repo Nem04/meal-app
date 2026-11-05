@@ -1,14 +1,18 @@
 <template>
   <view class="bind-page">
     <view class="bind-title">加入这个家</view>
-    <view class="bind-subtitle">第一次进入需要绑定微信身份，之后会自动登录。</view>
+    <view class="bind-subtitle">
+      第一次进入需要绑定微信身份，之后会自动登录。同一个主厨码可由多个微信使用，使用主厨码进入都会获得主厨权限。
+    </view>
     <view class="kind-row">
       <view :class="['kind', kind === 'chef' ? 'on' : '']" @tap="kind = 'chef'">主厨</view>
       <view :class="['kind', kind === 'member' ? 'on' : '']" @tap="kind = 'member'">家人</view>
     </view>
     <input v-model="displayName" class="input" maxlength="20" placeholder="显示名，例如：爸爸" />
     <input v-model="inviteCode" class="input" password placeholder="首次绑定口令" />
-    <view class="tip">口令只用于第一次绑定，之后由微信自动识别。</view>
+    <view class="tip">
+      主厨码和家人码都可以供多个微信使用；请只发给家庭成员。
+    </view>
     <button class="primary" :loading="loading" @tap="submit">绑定并进入</button>
   </view>
 </template>
@@ -36,6 +40,10 @@ export default {
         toast('绑定成功');
         uni.switchTab({ url: '/pages/today/today' });
       } catch (error) {
+        if (error.code === 'OPENID_ALREADY_BOUND') {
+          uni.switchTab({ url: '/pages/today/today' });
+          return;
+        }
         toast(error.message);
       } finally {
         this.loading = false;

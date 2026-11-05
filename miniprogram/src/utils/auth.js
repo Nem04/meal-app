@@ -51,6 +51,26 @@ export async function bindWechatMember({ kind, inviteCode, displayName }) {
   return response.data.member;
 }
 
+export async function changeRole({ kind, inviteCode }) {
+  const token = getToken();
+  if (!token) throw new ApiError(401, 'UNAUTHORIZED', '请先登录');
+  const response = await rawRequest('/auth/change-role', 'POST', {
+    kind,
+    inviteCode,
+  }, { token });
+  setAuth(token, response.data);
+  return response.data;
+}
+
+export async function refreshMember() {
+  const token = getToken();
+  if (!token) return null;
+  const response = await rawRequest('/auth/me', 'GET', undefined, { token });
+  const member = response.data && response.data.member;
+  if (member) setAuth(token, member);
+  return member || null;
+}
+
 export async function ensureLogin(force = false) {
   if (!force && getToken() && getStoredMember()) {
     return getStoredMember();

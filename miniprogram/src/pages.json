@@ -47,6 +47,12 @@
       "style": {
         "navigationBarTitleText": "绑定家庭成员"
       }
+    },
+    {
+      "path": "pages/role/role",
+      "style": {
+        "navigationBarTitleText": "调整身份"
+      }
     }
   ],
   "globalStyle": {

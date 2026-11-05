@@ -220,3 +220,181 @@ test('日历接口返回 year 与 month，匹配请求参数', async () => {
   assert.equal(body.data.month, 11);
   assert.ok(Array.isArray(body.data.days), 'days 应为数组');
 });
+
+test('多个微信可用同一个主厨码绑定，成员列表只返回已绑定成员', async () => {
+  const names = ['主厨甲', '主厨乙'];
+  const tokens = [];
+  for (let i = 0; i < names.length; i += 1) {
+    nextOpenid = `openid-chef-${i}`;
+    const login = await fetch(`${baseUrl}/auth/wechat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'good-code' }),
+    });
+    assert.equal((await login.json()).data.status, 'needs_binding');
+
+    const bind = await fetch(`${baseUrl}/auth/bind`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: 'good-code',
+        kind: 'chef',
+        inviteCode: 'chef-code-12345',
+        displayName: names[i],
+      }),
+    });
+    const body = await bind.json();
+    assert.equal(body.data.member.role, 'chef');
+    tokens.push(body.data.token);
+  }
+
+  const members = await fetch(`${baseUrl}/members`, {
+    headers: { Authorization: `Bearer ${tokens[0]}` },
+  });
+  const body = await members.json();
+  const matching = body.data.filter((m) => names.includes(m.name));
+  assert.equal(matching.length, 2);
+  assert.deepEqual(matching.map((m) => m.name).sort(), ['主厨乙', '主厨甲'].sort());
+  assert.ok(matching.every((m) => m.role === 'chef'));
+  assert.ok(
+    body.data.every((m) => m.id !== 'member-chef' && m.id !== 'member-family'),
+    '成员列表只应返回已绑定成员，不应包含未绑定种子槽位',
+  );
+});
+
+test('两位成员点同一道菜时保留两条提交审计', async () => {
+  const bindAccount = async (openid, kind, inviteCode, displayName) => {
+    nextOpenid = openid;
+    const login = await fetch(`${baseUrl}/auth/wechat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'good-code' }),
+    });
+    assert.equal((await login.json()).data.status, 'needs_binding');
+
+    const bind = await fetch(`${baseUrl}/auth/bind`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'good-code', kind, inviteCode, displayName }),
+    });
+    const body = await bind.json();
+    assert.equal(bind.status, 200);
+    return body.data;
+  };
+
+  const chef = await bindAccount(
+    'openid-audit-chef-20261105',
+    'chef',
+    'chef-code-12345',
+    '审计主厨甲',
+  );
+  const family = await bindAccount(
+    'openid-audit-family-20261105',
+    'family',
+    'family-code-123',
+    '审计家人乙',
+  );
+  assert.equal(chef.member.role, 'chef');
+  assert.equal(family.member.role, 'member');
+
+  const recipeResp = await fetch(`${baseUrl}/recipes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${chef.token}` },
+    body: JSON.stringify({
+      name: '审计菜谱',
+      category: '素',
+      steps: '1. 炒熟即可',
+      specs: [{ raw_name: '土豆', quantity: 1, unit: '个', note: '' }],
+    }),
+  });
+  assert.equal(recipeResp.status, 201);
+  const recipe = (await recipeResp.json()).data;
+
+  const mealResp = await fetch(`${baseUrl}/meals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${chef.token}` },
+    body: JSON.stringify({ title: '审计饭局', meal_date: '2026-11-05' }),
+  });
+  assert.equal(mealResp.status, 201);
+  const meal = (await mealResp.json()).data;
+
+  const order = async (token, note) => {
+    const resp = await fetch(`${baseUrl}/meals/${meal.id}/items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ recipe_version_id: recipe.version_id, note }),
+    });
+    assert.equal(resp.status, 201);
+    return (await resp.json()).data;
+  };
+
+  await order(chef.token, '主厨点');
+  await order(family.token, '家人点');
+
+  const detailResp = await fetch(`${baseUrl}/meals/${meal.id}`, {
+    headers: { Authorization: `Bearer ${chef.token}` },
+  });
+  assert.equal(detailResp.status, 200);
+  const detail = (await detailResp.json()).data;
+  const submissions = detail.submissions;
+
+  assert.equal(submissions.length, 2);
+  assert.equal(new Set(submissions.map((s) => s.member_id)).size, 2);
+  assert.deepEqual(
+    submissions.map((s) => s.member_id).sort(),
+    [chef.member.id, family.member.id].sort(),
+  );
+  assert.deepEqual(
+    submissions.map((s) => s.member_name_snapshot).sort(),
+    ['审计主厨甲', '审计家人乙'].sort(),
+  );
+  assert.ok(submissions.every((s) => s.recipe_version_id === recipe.version_id));
+});
+
+test('家人通过 HTTP 输入主厨码升级后获得主厨权限', async () => {
+  nextOpenid = 'openid-role-change-20261105';
+  const login = await fetch(`${baseUrl}/auth/wechat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: 'good-code' }),
+  });
+  assert.equal((await login.json()).data.status, 'needs_binding');
+
+  const bind = await fetch(`${baseUrl}/auth/bind`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      code: 'good-code',
+      kind: 'family',
+      inviteCode: 'family-code-123',
+      displayName: '角色家人甲',
+    }),
+  });
+  const bound = (await bind.json()).data;
+  assert.equal(bound.member.role, 'member');
+
+  const changed = await fetch(`${baseUrl}/auth/change-role`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${bound.token}`,
+    },
+    body: JSON.stringify({
+      kind: 'chef',
+      inviteCode: 'chef-code-12345',
+    }),
+  });
+  assert.equal(changed.status, 200);
+  const changedBody = (await changed.json()).data;
+  assert.equal(changedBody.role, 'chef');
+
+  const meal = await fetch(`${baseUrl}/meals`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${bound.token}`,
+    },
+    body: JSON.stringify({ title: '升级后开饭' }),
+  });
+  assert.equal(meal.status, 201);
+});

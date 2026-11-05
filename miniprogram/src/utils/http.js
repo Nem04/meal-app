@@ -7,8 +7,8 @@ export class ApiError extends Error {
   }
 }
 
-const DEV_BASE_URL = 'http://localhost:8080';
-const PROD_BASE_URL = 'https://api.example.com';
+const DEV_BASE_URL = 'http://192.168.5.2:8080';
+const PROD_BASE_URL = 'https://api.nemooooo.site';
 
 // Node 测试环境中 import.meta.env 为 undefined，使用可选链兜底；
 // 生产小程序构建时 import.meta.env.DEV 为 false，从而选择 HTTPS 地址。

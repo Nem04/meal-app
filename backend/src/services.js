@@ -275,7 +275,16 @@ export function identifyMember(name) {
   return repo.getMemberById(id);
 }
 
-const MEMBER_SLOTS = { chef: 'member-chef', family: 'member-family' };
+const ROLE_BY_KIND = {
+  chef: 'chef',
+  family: 'member',
+};
+
+const COLOR_BY_ROLE = {
+  chef: '#D96A3B',
+  member: '#5B8C5A',
+};
+
 const defaultBindLimiter = createAttemptLimiter();
 
 export function serializeMember(member) {
@@ -307,6 +316,38 @@ export async function loginWithWechat({ code, wechatClient, appConfig }) {
   return issueSession(member, appConfig.sessionTtlDays);
 }
 
+export function listBoundMembers() {
+  // 服务层序列化边界：任何调用方拿到的都是脱敏后的成员视图，
+  // 不暴露 openid / bound_at / created_at 等字段。
+  return repo.listBoundMembers().map(serializeMember);
+}
+
+export function changeMemberRole({
+  member,
+  kind,
+  inviteCode,
+  appConfig,
+  attemptLimiter = defaultBindLimiter,
+  attemptKeyPrefix = 'unknown',
+}) {
+  const attemptKey = `${attemptKeyPrefix}:role:${member.id}:${kind}`;
+  attemptLimiter.assertAllowed(attemptKey);
+  try {
+    verifyBindCode(kind, inviteCode, appConfig);
+  } catch (error) {
+    if (error.code === 'INVALID_INVITE_CODE') attemptLimiter.recordFailure(attemptKey);
+    throw error;
+  }
+  const role = ROLE_BY_KIND[kind];
+  const updated = repo.changeMemberRole({
+    memberId: member.id,
+    role,
+    color: COLOR_BY_ROLE[role],
+  });
+  attemptLimiter.clear(attemptKey);
+  return serializeMember(updated);
+}
+
 export async function bindWechatMember({
   code,
   kind,
@@ -326,10 +367,12 @@ export async function bindWechatMember({
     if (error.code === 'INVALID_INVITE_CODE') attemptLimiter.recordFailure(attemptKey);
     throw error;
   }
-  const member = repo.bindMemberSlot({
+  const role = ROLE_BY_KIND[kind];
+  const member = repo.bindMemberAccount({
     openid,
-    memberId: MEMBER_SLOTS[kind],
+    role,
     name: normalizeDisplayName(displayName),
+    color: COLOR_BY_ROLE[role],
     boundAt: new Date().toISOString(),
   });
   attemptLimiter.clear(attemptKey);
