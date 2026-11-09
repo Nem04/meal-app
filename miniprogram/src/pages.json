@@ -25,6 +25,12 @@
       }
     },
     {
+      "path": "pages/log-edit/log-edit",
+      "style": {
+        "navigationBarTitleText": "这顿留句话"
+      }
+    },
+    {
       "path": "pages/point/point",
       "style": {
         "navigationBarTitleText": "加一道菜"

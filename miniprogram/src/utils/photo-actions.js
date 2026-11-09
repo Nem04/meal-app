@@ -14,6 +14,46 @@ export function mimeTypeFromPath(path) {
   return 'image/jpeg';
 }
 
+export function photoPickerOptions(sourceType, count) {
+  return {
+    count,
+    sizeType: ['compressed'],
+    sourceType: [sourceType],
+  };
+}
+
+export function compressImage(src, quality = 80) {
+  return new Promise((resolve, reject) => {
+    uni.compressImage({
+      src,
+      quality,
+      success: (result) => resolve(result.tempFilePath),
+      fail: (error) => reject(new Error(error.errMsg || '图片压缩失败')),
+    });
+  });
+}
+
+export function getFileSize(filePath) {
+  return new Promise((resolve, reject) => {
+    uni.getFileInfo({
+      filePath,
+      success: (result) => resolve(result.size),
+      fail: (error) => reject(new Error(error.errMsg || '读取文件信息失败')),
+    });
+  });
+}
+
+export function readFileBase64(filePath) {
+  return new Promise((resolve, reject) => {
+    uni.getFileSystemManager().readFile({
+      filePath,
+      encoding: 'base64',
+      success: (result) => resolve(result.data),
+      fail: (error) => reject(new Error(error.errMsg || '读取图片失败')),
+    });
+  });
+}
+
 function absolutePhoto(photo) {
   return {
     ...photo,

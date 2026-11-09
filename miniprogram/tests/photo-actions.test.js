@@ -135,3 +135,17 @@ test('mimeTypeFromPath derives supported MIME types from file extensions', async
   assert.equal(mimeTypeFromPath('/tmp/photo.PNG'), 'image/png');
   assert.equal(mimeTypeFromPath('/tmp/photo.webp'), 'image/webp');
 });
+
+test('相册和相机使用正确的选图参数', async () => {
+  const { photoPickerOptions } = await import('../src/utils/photo-actions.js');
+  assert.deepEqual(photoPickerOptions('album', 2), {
+    count: 2,
+    sizeType: ['compressed'],
+    sourceType: ['album'],
+  });
+  assert.deepEqual(photoPickerOptions('camera', 1), {
+    count: 1,
+    sizeType: ['compressed'],
+    sourceType: ['camera'],
+  });
+});
