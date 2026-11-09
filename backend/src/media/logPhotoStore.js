@@ -31,6 +31,9 @@ export function resolveLogPhotoFile(dataDir, fileName) {
 }
 
 export function saveLogPhotoFile({ dataDir, base64, declaredMime }) {
+  if (!Object.hasOwn(EXTENSIONS, declaredMime)) {
+    throw new AppError(400, 'PHOTO_TYPE_UNSUPPORTED', '不支持这种图片格式');
+  }
   const buffer = Buffer.from(String(base64 || ''), 'base64');
   if (buffer.length === 0) throw new AppError(400, 'PHOTO_INVALID_CONTENT', '照片内容为空');
   if (buffer.length > MAX_LOG_PHOTO_BYTES) throw new AppError(413, 'PHOTO_TOO_LARGE', '单张照片不能超过 2 MB');
@@ -39,7 +42,6 @@ export function saveLogPhotoFile({ dataDir, base64, declaredMime }) {
     throw new AppError(400, 'PHOTO_INVALID_CONTENT', '照片内容与格式不匹配');
   }
   const extension = EXTENSIONS[detected];
-  if (!extension) throw new AppError(400, 'PHOTO_TYPE_UNSUPPORTED', '不支持这种图片格式');
   const fileName = `${randomBytes(24).toString('hex')}.${extension}`;
   const dir = logPhotoDir(dataDir);
   mkdirSync(dir, { recursive: true });
