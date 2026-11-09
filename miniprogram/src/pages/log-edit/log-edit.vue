@@ -1,6 +1,10 @@
 <template>
   <view>
     <view class="section-title">这顿吃啥 · 留句话</view>
+    <view v-if="meal.title" class="meal-head">
+      <view class="meal-title">{{ meal.title }}</view>
+      <view v-if="meal.meal_date" class="meal-date">{{ meal.meal_date }}</view>
+    </view>
     <view class="card">
       <textarea
         v-model="sentence"
@@ -76,6 +80,7 @@ export default {
       existingPhotos: [],
       localPhotos: [],
       saving: false,
+      initialized: false,
     };
   },
   onLoad(options) {
@@ -87,14 +92,16 @@ export default {
   },
   methods: {
     async load() {
-      this.localPhotos = [];
       try {
         const [meal, photos] = await Promise.all([
           getMealDetail(this.mealId),
           listMealPhotos(this.mealId),
         ]);
         this.meal = meal || {};
-        this.sentence = meal?.log?.sentence || '';
+        if (!this.initialized) {
+          this.sentence = meal?.log?.sentence || '';
+          this.initialized = true;
+        }
         this.existingPhotos = photos;
       } catch (error) {
         toast(error.message);
@@ -177,7 +184,7 @@ export default {
       try {
         await request(`/meals/${this.mealId}/log`, 'POST', {
           sentence: this.sentence || '',
-          rating: '',
+          rating: this.meal?.log?.rating || '',
         });
         while (this.localPhotos.length) {
           const file = this.localPhotos[0];
@@ -202,6 +209,19 @@ export default {
 </script>
 
 <style>
+.meal-head {
+  padding: 4rpx 24rpx 12rpx;
+}
+.meal-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #3B342E;
+}
+.meal-date {
+  margin-top: 4rpx;
+  font-size: 24rpx;
+  color: #8A8077;
+}
 .sentence-input {
   width: 100%;
   min-height: 160rpx;

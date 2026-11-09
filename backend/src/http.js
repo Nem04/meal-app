@@ -47,7 +47,16 @@ export function serveLogPhotoFile(pathname, res, dataDir) {
     'Content-Type': LOG_PHOTO_MIME[ext] || 'application/octet-stream',
     'Cache-Control': 'private, max-age=3600',
   });
-  createReadStream(filePath).pipe(res);
+  const stream = createReadStream(filePath);
+  stream.on('error', (error) => {
+    if (res.headersSent) {
+      res.destroy(error);
+    } else {
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Internal Server Error');
+    }
+  });
+  stream.pipe(res);
 }
 
 export function serveStatic(pathname, res) {

@@ -1,9 +1,17 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 const env = process.env;
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// DB、照片存储与备份脚本共用同一个数据目录默认值。
+export const DEFAULT_DATA_DIR = join(__dirname, '..', '..', 'data');
 
 export const config = {
   port: Number(env.PORT || 8080),
   host: env.HOST || '0.0.0.0',
-  dataDir: env.DATA_DIR || '',
+  dataDir: env.DATA_DIR || DEFAULT_DATA_DIR,
   passcode: env.FAMILY_PASSCODE || '',
   nodeEnv: env.NODE_ENV || 'development',
   authMode: env.AUTH_MODE || 'legacy',

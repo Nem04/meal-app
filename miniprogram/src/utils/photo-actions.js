@@ -55,9 +55,10 @@ export function readFileBase64(filePath) {
 }
 
 function absolutePhoto(photo) {
+  const url = photo && typeof photo.url === 'string' && photo.url ? photo.url : '';
   return {
     ...photo,
-    url: photo.url.startsWith('http') ? photo.url : `${BASE_URL}${photo.url}`,
+    url: url.startsWith('http') ? url : (url ? `${BASE_URL}${url}` : url),
   };
 }
 

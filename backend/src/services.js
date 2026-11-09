@@ -4,6 +4,7 @@ import { mergeIngredients } from './domain/merge.js';
 import { parseInventoryText } from './domain/parseInventory.js';
 import { canonicalName, normalizeUnit } from './domain/canonical.js';
 import { AppError } from './errors.js';
+import { config } from './config.js';
 import { verifyBindCode } from './auth/passcode.js';
 import { hashSessionToken, newSessionToken, sessionExpiresAt } from './auth/session.js';
 import { createAttemptLimiter } from './auth/rateLimit.js';
@@ -141,7 +142,7 @@ export function listMealLogPhotos(mealId) {
   }));
 }
 
-export function addMealLogPhoto({ meal_id, base64, mimeType, member, dataDir }) {
+export function addMealLogPhoto({ meal_id, base64, mimeType, member, dataDir = config.dataDir }) {
   const meal = repo.getMeal(meal_id);
   if (!meal) throw new AppError(404, 'MEAL_NOT_FOUND', '这顿饭不存在');
   if (repo.countMealLogPhotos(meal_id) >= MAX_LOG_PHOTOS_PER_MEAL) {
@@ -149,6 +150,7 @@ export function addMealLogPhoto({ meal_id, base64, mimeType, member, dataDir }) 
   }
   const saved = saveLogPhotoFile({ dataDir, base64, declaredMime: mimeType });
   const id = uuid();
+  const createdAt = new Date().toISOString();
   try {
     repo.insertMealLogPhoto({
       id,
@@ -158,23 +160,32 @@ export function addMealLogPhoto({ meal_id, base64, mimeType, member, dataDir }) 
       sizeBytes: saved.sizeBytes,
       createdById: member.id,
       createdByName: member.name,
-      createdAt: new Date().toISOString(),
+      createdAt,
     });
   } catch (error) {
     deleteLogPhotoFile({ dataDir, fileName: saved.fileName });
     throw error;
   }
-  return { id, url: `/media/log-photos/${saved.fileName}`, mimeType: saved.mimeType, sizeBytes: saved.sizeBytes };
+  return {
+    id,
+    url: `/media/log-photos/${saved.fileName}`,
+    mimeType: saved.mimeType,
+    sizeBytes: saved.sizeBytes,
+    createdAt,
+    createdBy: member.name,
+    createdById: member.id,
+  };
 }
 
-export function deleteMealLogPhoto({ meal_id, photo_id, member, dataDir }) {
+export function deleteMealLogPhoto({ meal_id, photo_id, member, dataDir = config.dataDir }) {
   const photo = repo.getMealLogPhoto(meal_id, photo_id);
   if (!photo) throw new AppError(404, 'PHOTO_NOT_FOUND', '照片不存在');
   if (member.role !== 'chef' && member.id !== photo.created_by_id) {
     throw new AppError(403, 'FORBIDDEN', '只能删除自己上传的照片');
   }
   deleteLogPhotoFile({ dataDir, fileName: photo.file_name });
-  repo.deleteMealLogPhoto(meal_id, photo_id);
+  const changes = repo.deleteMealLogPhoto(meal_id, photo_id);
+  if (changes === 0) throw new AppError(404, 'PHOTO_NOT_FOUND', '照片不存在');
   return { deleted: true, photo_id };
 }
 
@@ -278,7 +289,7 @@ export function togglePrep({ meal_id, entry_id, prepared }) {
   return listPrep(meal_id);
 }
 
-export function deleteMeal(mealId, dataDir) {
+export function deleteMeal(mealId, dataDir = config.dataDir) {
   const meal = repo.getMeal(mealId);
   if (!meal) throw new Error('这顿饭不存在');
   const photos = repo.listMealLogPhotos(mealId);
@@ -286,8 +297,8 @@ export function deleteMeal(mealId, dataDir) {
   for (const photo of photos) {
     try {
       deleteLogPhotoFile({ dataDir, fileName: photo.file_name });
-    } catch {
-      console.error(`删除照片文件失败: ${photo.file_name}`);
+    } catch (error) {
+      console.error(`删除照片文件失败: ${photo.file_name}: ${error?.message || error}`);
     }
   }
   return { deleted: changes > 0, meal_id: mealId };

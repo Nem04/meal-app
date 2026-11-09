@@ -90,6 +90,14 @@ test('合法 PNG 上传返回 201 和照片文件地址', async () => {
   assert.match(photo.url, /^\/media\/log-photos\/[a-f0-9]{48}\.png$/);
   assert.equal(photo.mimeType, 'image/png');
   assert.ok(photo.id);
+  assert.equal(photo.sizeBytes, PNG_BYTES.length);
+  assert.equal(photo.createdById, FAMILY);
+  assert.equal(photo.createdBy, '家人');
+  assert.match(photo.createdAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.deepEqual(
+    Object.keys(photo).sort(),
+    ['createdAt', 'createdBy', 'createdById', 'id', 'mimeType', 'sizeBytes', 'url'].sort(),
+  );
 });
 
 test('上传者本人可以删除照片', async () => {

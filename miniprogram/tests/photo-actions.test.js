@@ -157,3 +157,20 @@ test('照片列表请求使用饭局照片接口', async () => {
   assert.equal(capturedRequest.method, 'GET');
   assert.match(capturedRequest.url, /\/api\/meals\/meal-log\/log\/photos$/);
 });
+
+test('缺少或为空的照片 URL 不会导致绝对地址转换崩溃', async () => {
+  nextResponse = {
+    photos: [
+      { id: 'photo-missing', url: '' },
+      { id: 'photo-undefined' },
+      { id: 'photo-relative', url: '/media/log-photos/d.png' },
+    ],
+  };
+  const { listMealPhotos } = await import('../src/utils/photo-actions.js');
+
+  const photos = await listMealPhotos('meal-missing-url');
+
+  assert.equal(photos[0].url, '');
+  assert.equal(photos[1].url, '');
+  assert.equal(photos[2].url, 'http://192.168.5.2:8080/media/log-photos/d.png');
+});

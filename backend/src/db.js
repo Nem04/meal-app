@@ -18,7 +18,7 @@ export function openDb() {
   if (config.dataDir === ':memory:') {
     db = new DatabaseSync(':memory:');
   } else {
-    const dataDir = config.dataDir ? config.dataDir : join(__dirname, '..', '..', 'data');
+    const dataDir = config.dataDir;
     mkdirSync(dataDir, { recursive: true });
     const dbPath = join(dataDir, 'app.db');
     db = new DatabaseSync(dbPath);

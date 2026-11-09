@@ -151,7 +151,6 @@ async function handleMeals(method, seg, req, res, q) {
       base64: body.data,
       mimeType: body.mimeType,
       member: req.member,
-      dataDir: config.dataDir,
     }));
   }
   if (id && seg[2] === 'log' && seg[3] === 'photos' && seg[4] && method === 'DELETE') {
@@ -159,7 +158,6 @@ async function handleMeals(method, seg, req, res, q) {
       meal_id: id,
       photo_id: seg[4],
       member: req.member,
-      dataDir: config.dataDir,
     }));
   }
   if (!id && method === 'GET') return ok(res, svc.listMeals());
@@ -193,7 +191,7 @@ async function handleMeals(method, seg, req, res, q) {
     guardChef(req);
     return ok(res, svc.deleteMealItem({ meal_id: id, item_id: seg[3] }));
   }
-  if (id && !seg[2] && method === 'DELETE') { guardChef(req); return ok(res, svc.deleteMeal(id, config.dataDir)); }
+  if (id && !seg[2] && method === 'DELETE') { guardChef(req); return ok(res, svc.deleteMeal(id)); }
   if (id && seg[2] === 'close' && method === 'PATCH') { guardChef(req); return ok(res, svc.closeMeal(id)); }
   if (id && seg[2] === 'log' && !seg[3] && method === 'POST') {
     const b = await readBody(req);
