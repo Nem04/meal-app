@@ -185,7 +185,7 @@ async function handleMeals(method, seg, req, res, q) {
     return ok(res, svc.togglePrep({ meal_id: id, entry_id: seg[3], prepared: !!b.prepared }));
   }
   if (id && seg[2] === 'prep' && !seg[3] && method === 'PATCH') return ok(res, svc.regeneratePrep(id));
-  if (id && method === 'DELETE') { guardChef(req); return ok(res, svc.deleteMeal(id)); }
+  if (id && !seg[2] && method === 'DELETE') { guardChef(req); return ok(res, svc.deleteMeal(id, config.dataDir)); }
   if (id && seg[2] === 'close' && method === 'PATCH') { guardChef(req); return ok(res, svc.closeMeal(id)); }
   if (id && seg[2] === 'log' && !seg[3] && method === 'GET') return ok(res, svc.getMealWithPrep(id).log);
   if (id && seg[2] === 'log' && !seg[3] && method === 'POST') {

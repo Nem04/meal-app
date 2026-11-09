@@ -1,6 +1,6 @@
 import { test, before, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -49,4 +49,19 @@ test('照片只能由上传者本人或主厨删除', (t) => {
     (error) => error.code === 'FORBIDDEN',
   );
   assert.equal(svc.deleteMealLogPhoto({ meal_id: meal.id, photo_id: photo.id, member: chef, dataDir }).deleted, true);
+});
+
+test('删除饭局时同时删除照片文件', (t) => {
+  const dataDir = mkdtempSync(join(tmpdir(), 'meal-photo-cleanup-'));
+  t.after(() => rmSync(dataDir, { recursive: true, force: true }));
+  const meal = svc.openMeal({ title: '删照片', meal_date: '2026-11-10', created_by: '主厨' });
+  const member = { id: 'member-chef', name: '主厨', role: 'chef' };
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex').toString('base64');
+  const photo = svc.addMealLogPhoto({ meal_id: meal.id, base64: png, mimeType: 'image/png', member, dataDir });
+  const fileName = photo.url.split('/').pop();
+  const filePath = join(dataDir, 'uploads', 'log-photos', fileName);
+
+  assert.ok(existsSync(filePath));
+  svc.deleteMeal(meal.id, dataDir);
+  assert.equal(existsSync(filePath), false);
 });

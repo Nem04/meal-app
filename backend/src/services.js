@@ -238,11 +238,18 @@ export function togglePrep({ meal_id, entry_id, prepared }) {
   return listPrep(meal_id);
 }
 
-export function deleteMeal(mealId) {
+export function deleteMeal(mealId, dataDir) {
   const meal = repo.getMeal(mealId);
   if (!meal) throw new Error('这顿饭不存在');
-  // 日志等关联记录由外键级联删除（meal_log ON DELETE CASCADE）。
+  const photos = repo.listMealLogPhotos(mealId);
   const changes = repo.deleteMeal(mealId);
+  for (const photo of photos) {
+    try {
+      deleteLogPhotoFile({ dataDir, fileName: photo.file_name });
+    } catch {
+      console.error(`删除照片文件失败: ${photo.file_name}`);
+    }
+  }
   return { deleted: changes > 0, meal_id: mealId };
 }
 

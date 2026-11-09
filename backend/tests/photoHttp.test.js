@@ -242,3 +242,19 @@ test('未知照片子路径 GET 返回 404', async () => {
   });
   assert.equal(response.status, 404);
 });
+
+test('DELETE /meals/:id/log/photos 不带照片 ID 时返回 404 且不删除饭局', async () => {
+  const meal = await createMeal('照片删除守卫');
+
+  const response = await fetch(`${baseUrl}/meals/${meal.id}/log/photos`, {
+    method: 'DELETE',
+    headers: { 'x-member-id': CHEF },
+  });
+  assert.equal(response.status, 404);
+
+  const stillThere = await fetch(`${baseUrl}/meals/${meal.id}`, {
+    headers: { 'x-member-id': CHEF },
+  });
+  assert.equal(stillThere.status, 200);
+  assert.equal((await stillThere.json()).data.id, meal.id);
+});
