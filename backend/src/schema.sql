@@ -92,6 +92,21 @@ CREATE TABLE IF NOT EXISTS meal_log (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS meal_log_photo (
+  id TEXT PRIMARY KEY,
+  meal_id TEXT NOT NULL REFERENCES meal(id) ON DELETE CASCADE,
+  file_name TEXT NOT NULL UNIQUE,
+  mime_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  created_by_id TEXT NOT NULL,
+  created_by_name TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_meal_log_photo_meal
+ON meal_log_photo(meal_id);
+
 CREATE TABLE IF NOT EXISTS family_member (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,

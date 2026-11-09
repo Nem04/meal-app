@@ -261,10 +261,38 @@ export function getMealLog(mealId) {
   return db().prepare('SELECT * FROM meal_log WHERE meal_id = ?').get(mealId);
 }
 
+export function insertMealLogPhoto({
+  id, mealId, fileName, mimeType, sizeBytes, createdById, createdByName, createdAt,
+}) {
+  db().prepare(
+    'INSERT INTO meal_log_photo(id,meal_id,file_name,mime_type,size_bytes,created_by_id,created_by_name,created_at) VALUES(?,?,?,?,?,?,?,?)'
+  ).run(id, mealId, fileName, mimeType, sizeBytes, createdById, createdByName, createdAt);
+}
+
+export function countMealLogPhotos(mealId) {
+  return db().prepare('SELECT COUNT(*) AS n FROM meal_log_photo WHERE meal_id = ?').get(mealId).n;
+}
+
+export function listMealLogPhotos(mealId) {
+  return db().prepare(
+    'SELECT id,meal_id,file_name,mime_type,size_bytes,created_by_id,created_by_name,created_at FROM meal_log_photo WHERE meal_id = ? ORDER BY created_at ASC'
+  ).all(mealId);
+}
+
+export function getMealLogPhoto(mealId, photoId) {
+  return db().prepare('SELECT * FROM meal_log_photo WHERE meal_id = ? AND id = ?').get(mealId, photoId);
+}
+
+export function deleteMealLogPhoto(mealId, photoId) {
+  return db().prepare('DELETE FROM meal_log_photo WHERE meal_id = ? AND id = ?').run(mealId, photoId).changes;
+}
+
 export function mealsForMonth(year, month) {
   const prefix = `${year}-${String(month).padStart(2, '0')}`;
   return db().prepare(
-    'SELECT m.*, l.sentence, l.rating FROM meal m LEFT JOIN meal_log l ON l.meal_id = m.id ' +
+    'SELECT m.*, l.sentence, l.rating, ' +
+    '(SELECT COUNT(*) FROM meal_log_photo p WHERE p.meal_id = m.id) AS photo_count ' +
+    'FROM meal m LEFT JOIN meal_log l ON l.meal_id = m.id ' +
     'WHERE m.meal_date LIKE ? ORDER BY m.meal_date ASC'
   ).all(`${prefix}%`);
 }
