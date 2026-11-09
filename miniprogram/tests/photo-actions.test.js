@@ -149,3 +149,11 @@ test('相册和相机使用正确的选图参数', async () => {
     sourceType: ['camera'],
   });
 });
+
+test('照片列表请求使用饭局照片接口', async () => {
+  nextResponse = { photos: [] };
+  const { listMealPhotos } = await import('../src/utils/photo-actions.js');
+  await listMealPhotos('meal-log');
+  assert.equal(capturedRequest.method, 'GET');
+  assert.match(capturedRequest.url, /\/api\/meals\/meal-log\/log\/photos$/);
+});
