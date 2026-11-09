@@ -4,7 +4,7 @@ import { URL } from 'node:url';
 import { config, validateAuthConfig } from './config.js';
 import { openDb } from './db.js';
 import { handle } from './routes.js';
-import { serveStatic } from './http.js';
+import { serveStatic, serveLogPhotoFile } from './http.js';
 import { fail } from './util.js';
 
 validateAuthConfig(config);
@@ -54,6 +54,11 @@ const server = createServer((req, res) => {
     pathname.startsWith('/calendar');
   if (isBizPath) {
     handle(req, res, url);
+    return;
+  }
+
+  if (pathname.startsWith('/media/log-photos/')) {
+    serveLogPhotoFile(pathname, res, config.dataDir);
     return;
   }
 

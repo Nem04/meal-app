@@ -123,9 +123,16 @@ async function handleAuth(method, seg, req, res, wechatClient) {
   fail(res, 404, '没有这个认证接口', 'NOT_FOUND');
 }
 
-async function readBody(req) {
+async function readBody(req, maxBytes = 10 * 1024 * 1024) {
   const chunks = [];
-  for await (const c of req) chunks.push(c);
+  let total = 0;
+  for await (const c of req) {
+    total += c.length;
+    if (total > maxBytes) {
+      throw new AppError(413, 'PAYLOAD_TOO_LARGE', '请求内容过大');
+    }
+    chunks.push(c);
+  }
   const raw = Buffer.concat(chunks).toString('utf8');
   if (!raw) return {};
   try { return JSON.parse(raw); } catch { return { _raw: raw }; }
@@ -134,6 +141,27 @@ async function readBody(req) {
 async function handleMeals(method, seg, req, res, q) {
   const id = seg[1];
 
+  if (id && seg[2] === 'log' && seg[3] === 'photos' && !seg[4] && method === 'GET') {
+    return ok(res, { photos: svc.listMealLogPhotos(id) });
+  }
+  if (id && seg[2] === 'log' && seg[3] === 'photos' && !seg[4] && method === 'POST') {
+    const body = await readBody(req, 3 * 1024 * 1024);
+    return created(res, svc.addMealLogPhoto({
+      meal_id: id,
+      base64: body.data,
+      mimeType: body.mimeType,
+      member: req.member,
+      dataDir: config.dataDir,
+    }));
+  }
+  if (id && seg[2] === 'log' && seg[3] === 'photos' && seg[4] && method === 'DELETE') {
+    return ok(res, svc.deleteMealLogPhoto({
+      meal_id: id,
+      photo_id: seg[4],
+      member: req.member,
+      dataDir: config.dataDir,
+    }));
+  }
   if (!id && method === 'GET') return ok(res, svc.listMeals());
   if (!id && method === 'POST') {
     const b = await readBody(req);

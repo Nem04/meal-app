@@ -7,6 +7,12 @@ import { AppError } from './errors.js';
 import { verifyBindCode } from './auth/passcode.js';
 import { hashSessionToken, newSessionToken, sessionExpiresAt } from './auth/session.js';
 import { createAttemptLimiter } from './auth/rateLimit.js';
+import { uuid } from './util.js';
+import {
+  MAX_LOG_PHOTOS_PER_MEAL,
+  saveLogPhotoFile,
+  deleteLogPhotoFile,
+} from './media/logPhotoStore.js';
 
 export function healthCheck() {
   repo.db().prepare('SELECT 1').get();
@@ -108,6 +114,55 @@ function getMealDetail(id) {
     items: repo.listMealItems(id),
     submissions: repo.listMealSubmissions(id),
   };
+}
+
+export function listMealLogPhotos(mealId) {
+  return repo.listMealLogPhotos(mealId).map((photo) => ({
+    id: photo.id,
+    url: `/media/log-photos/${photo.file_name}`,
+    mimeType: photo.mime_type,
+    sizeBytes: photo.size_bytes,
+    createdAt: photo.created_at,
+    createdBy: photo.created_by_name,
+    createdById: photo.created_by_id,
+  }));
+}
+
+export function addMealLogPhoto({ meal_id, base64, mimeType, member, dataDir }) {
+  const meal = repo.getMeal(meal_id);
+  if (!meal) throw new AppError(404, 'MEAL_NOT_FOUND', '这顿饭不存在');
+  if (repo.countMealLogPhotos(meal_id) >= MAX_LOG_PHOTOS_PER_MEAL) {
+    throw new AppError(409, 'PHOTO_LIMIT_EXCEEDED', '每顿饭最多 3 张照片');
+  }
+  const saved = saveLogPhotoFile({ dataDir, base64, declaredMime: mimeType });
+  const id = uuid();
+  try {
+    repo.insertMealLogPhoto({
+      id,
+      mealId: meal_id,
+      fileName: saved.fileName,
+      mimeType: saved.mimeType,
+      sizeBytes: saved.sizeBytes,
+      createdById: member.id,
+      createdByName: member.name,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    deleteLogPhotoFile({ dataDir, fileName: saved.fileName });
+    throw error;
+  }
+  return { id, url: `/media/log-photos/${saved.fileName}`, mimeType: saved.mimeType, sizeBytes: saved.sizeBytes };
+}
+
+export function deleteMealLogPhoto({ meal_id, photo_id, member, dataDir }) {
+  const photo = repo.getMealLogPhoto(meal_id, photo_id);
+  if (!photo) throw new AppError(404, 'PHOTO_NOT_FOUND', '照片不存在');
+  if (member.role !== 'chef' && member.id !== photo.created_by_id) {
+    throw new AppError(403, 'FORBIDDEN', '只能删除自己上传的照片');
+  }
+  repo.deleteMealLogPhoto(meal_id, photo_id);
+  deleteLogPhotoFile({ dataDir, fileName: photo.file_name });
+  return { deleted: true, photo_id };
 }
 
 export function addMealItem({

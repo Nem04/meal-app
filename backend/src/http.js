@@ -2,6 +2,7 @@
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join, normalize, extname, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveLogPhotoFile } from './media/logPhotoStore.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, '..', '..', 'frontend', 'public');
@@ -17,6 +18,37 @@ const MIME = {
   '.ico': 'image/x-icon',
   '.webp': 'image/webp',
 };
+
+const LOG_PHOTO_MIME = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+};
+
+export function serveLogPhotoFile(pathname, res, dataDir) {
+  const prefix = '/media/log-photos/';
+  const fileName = pathname.startsWith(prefix) ? pathname.slice(prefix.length) : '';
+  let filePath;
+  try {
+    filePath = resolveLogPhotoFile(dataDir, fileName);
+  } catch {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Not Found');
+    return;
+  }
+  if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Not Found');
+    return;
+  }
+  const ext = extname(filePath).toLowerCase();
+  res.writeHead(200, {
+    'Content-Type': LOG_PHOTO_MIME[ext] || 'application/octet-stream',
+    'Cache-Control': 'private, max-age=3600',
+  });
+  createReadStream(filePath).pipe(res);
+}
 
 export function serveStatic(pathname, res) {
   let filePath = pathname === '/' ? '/index.html' : pathname;
