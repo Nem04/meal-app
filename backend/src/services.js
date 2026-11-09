@@ -160,8 +160,8 @@ export function deleteMealLogPhoto({ meal_id, photo_id, member, dataDir }) {
   if (member.role !== 'chef' && member.id !== photo.created_by_id) {
     throw new AppError(403, 'FORBIDDEN', '只能删除自己上传的照片');
   }
-  repo.deleteMealLogPhoto(meal_id, photo_id);
   deleteLogPhotoFile({ dataDir, fileName: photo.file_name });
+  repo.deleteMealLogPhoto(meal_id, photo_id);
   return { deleted: true, photo_id };
 }
 

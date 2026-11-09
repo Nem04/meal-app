@@ -168,7 +168,7 @@ async function handleMeals(method, seg, req, res, q) {
     guardChef(req);
     return created(res, svc.openMeal({ ...b, created_by: req.member.name }));
   }
-  if (id && method === 'GET') return ok(res, svc.getMealWithPrep(id));
+  if (id && !seg[2] && method === 'GET') return ok(res, svc.getMealWithPrep(id));
   if (id && seg[2] === 'items' && method === 'POST') {
     const body = await readBody(req);
     return created(res, svc.addMealItem({
@@ -187,8 +187,8 @@ async function handleMeals(method, seg, req, res, q) {
   if (id && seg[2] === 'prep' && !seg[3] && method === 'PATCH') return ok(res, svc.regeneratePrep(id));
   if (id && method === 'DELETE') { guardChef(req); return ok(res, svc.deleteMeal(id)); }
   if (id && seg[2] === 'close' && method === 'PATCH') { guardChef(req); return ok(res, svc.closeMeal(id)); }
-  if (id && seg[2] === 'log' && method === 'GET') return ok(res, svc.getMealWithPrep(id).log);
-  if (id && seg[2] === 'log' && method === 'POST') {
+  if (id && seg[2] === 'log' && !seg[3] && method === 'GET') return ok(res, svc.getMealWithPrep(id).log);
+  if (id && seg[2] === 'log' && !seg[3] && method === 'POST') {
     const b = await readBody(req);
     return created(res, svc.saveMealLog({ meal_id: id, ...b }));
   }

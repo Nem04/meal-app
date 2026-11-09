@@ -163,3 +163,82 @@ test('媒体文件接口返回已保存的图片字节', async () => {
   assert.equal(response.headers.get('cache-control'), 'private, max-age=3600');
   assert.deepEqual(Buffer.from(await response.arrayBuffer()), PNG_BYTES);
 });
+
+async function uploadPng(mealId, memberId = FAMILY) {
+  const response = await fetch(`${baseUrl}/meals/${mealId}/log/photos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({ data: PNG_BASE64, mimeType: 'image/png' }),
+  });
+  assert.equal(response.status, 201);
+  return (await response.json()).data;
+}
+
+test('声明 GIF 类型时返回 PHOTO_TYPE_UNSUPPORTED', async () => {
+  const meal = await createMeal('不支持的类型');
+
+  const response = await fetch(`${baseUrl}/meals/${meal.id}/log/photos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': FAMILY },
+    body: JSON.stringify({
+      data: 'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
+      mimeType: 'image/gif',
+    }),
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).data.code, 'PHOTO_TYPE_UNSUPPORTED');
+});
+
+test('第四张照片返回 409 PHOTO_LIMIT_EXCEEDED', async () => {
+  const meal = await createMeal('照片上限');
+
+  for (let index = 0; index < 3; index += 1) {
+    await uploadPng(meal.id);
+  }
+
+  const response = await fetch(`${baseUrl}/meals/${meal.id}/log/photos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': FAMILY },
+    body: JSON.stringify({ data: PNG_BASE64, mimeType: 'image/png' }),
+  });
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).data.code, 'PHOTO_LIMIT_EXCEEDED');
+});
+
+test('主厨可以删除其他成员上传的照片', async () => {
+  const meal = await createMeal('主厨删除');
+  const photo = await uploadPng(meal.id, FAMILY);
+
+  const deletion = await fetch(`${baseUrl}/meals/${meal.id}/log/photos/${photo.id}`, {
+    method: 'DELETE',
+    headers: { 'x-member-id': CHEF },
+  });
+  assert.equal(deletion.status, 200);
+  assert.equal((await deletion.json()).data.deleted, true);
+
+  const list = await fetch(`${baseUrl}/meals/${meal.id}/log/photos`, {
+    headers: { 'x-member-id': CHEF },
+  });
+  assert.deepEqual((await list.json()).data, { photos: [] });
+});
+
+test('未知照片子路径 POST 返回 404 且不写日志', async () => {
+  const meal = await createMeal('错误子路径');
+
+  const response = await fetch(`${baseUrl}/meals/${meal.id}/log/photos/extra`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': CHEF },
+    body: JSON.stringify({ sentence: '不应写入', rating: '好吃' }),
+  });
+  assert.equal(response.status, 404);
+  assert.equal(repo.getMealLog(meal.id), undefined);
+});
+
+test('未知照片子路径 GET 返回 404', async () => {
+  const meal = await createMeal('错误子路径读取');
+
+  const response = await fetch(`${baseUrl}/meals/${meal.id}/log/photos/extra`, {
+    headers: { 'x-member-id': CHEF },
+  });
+  assert.equal(response.status, 404);
+});
