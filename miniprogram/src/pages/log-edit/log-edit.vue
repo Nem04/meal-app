@@ -20,7 +20,11 @@
             class="photo-thumb"
             @tap="previewExisting(index)"
           />
-          <view class="photo-delete" @tap.stop="removeExisting(photo)">×</view>
+          <view
+            v-if="canDeleteExisting(photo)"
+            class="photo-delete"
+            @tap.stop="removeExisting(photo)"
+          >×</view>
         </view>
         <view v-for="(photo, index) in localPhotos" :key="'local-' + index" class="photo-cell">
           <image
@@ -48,7 +52,7 @@
 </template>
 
 <script>
-import { request, toast } from '../../utils/index.js';
+import { request, toast, getMember } from '../../utils/index.js';
 import { getMealDetail } from '../../utils/meal-actions.js';
 import {
   listMealPhotos,
@@ -67,6 +71,7 @@ export default {
     return {
       mealId: '',
       meal: {},
+      member: getMember(),
       sentence: '',
       existingPhotos: [],
       localPhotos: [],
@@ -77,17 +82,19 @@ export default {
     this.mealId = options.mealId || '';
   },
   onShow() {
+    this.member = getMember();
     this.load();
   },
   methods: {
     async load() {
+      this.localPhotos = [];
       try {
         const [meal, photos] = await Promise.all([
           getMealDetail(this.mealId),
           listMealPhotos(this.mealId),
         ]);
-        this.meal = meal;
-        this.sentence = meal.log?.sentence || '';
+        this.meal = meal || {};
+        this.sentence = meal?.log?.sentence || '';
         this.existingPhotos = photos;
       } catch (error) {
         toast(error.message);
@@ -119,6 +126,9 @@ export default {
         try {
           let path = file.path;
           let size = file.size;
+          if (!size) {
+            size = await getFileSize(path);
+          }
           if (size > 2 * 1024 * 1024) {
             path = await compressImage(path);
             size = await getFileSize(path);
@@ -144,6 +154,11 @@ export default {
         toast(error.message);
       }
     },
+    canDeleteExisting(photo) {
+      const member = this.member;
+      if (!member) return false;
+      return member.role === 'chef' || member.id === photo.createdById;
+    },
     previewExisting(index) {
       uni.previewImage({
         urls: this.existingPhotos.map((photo) => photo.url),
@@ -157,6 +172,7 @@ export default {
       });
     },
     async save() {
+      if (this.saving) return;
       this.saving = true;
       try {
         await request(`/meals/${this.mealId}/log`, 'POST', {
