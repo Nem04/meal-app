@@ -64,6 +64,9 @@ export function forkRecipeVersion(versionId) {
 export function overwriteVersion({ versionId, title = '', steps = '', specs = [] }) {
   const v = repo.getVersion(versionId);
   if (!v) throw new Error('版本不存在');
+  if (v.is_base === 1) {
+    throw new AppError(409, 'BASE_VERSION_READONLY', '基础菜谱不能直接修改，请先另存为我家版');
+  }
   // copy-on-write：编辑只改该版本，绝不触碰 fork 源。
   repo.setVersionSteps(versionId, steps);
   if (title) repo.updateVersionTitle(versionId, title);
@@ -91,9 +94,19 @@ export function listMeals() {
   return repo.listMeals();
 }
 
-export function openMeal({ title, meal_date, created_by }) {
+function localDateString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function openMeal({ title, meal_date, created_by }, now = new Date()) {
   if (!title) title = '今晚这顿饭';
-  if (!meal_date) meal_date = new Date().toISOString().slice(0, 10);
+  if (!meal_date) meal_date = localDateString(now);
+  if (repo.listMeals().some((meal) => meal.status === 'open')) {
+    throw new AppError(409, 'OPEN_MEAL_EXISTS', '已有进行中的饭，请先结束');
+  }
   const id = repo.insertMeal(title, meal_date, created_by);
   return getMealDetail(id);
 }
@@ -198,6 +211,20 @@ export function addMealItem({
   return { meal: getMealDetail(meal_id), prep: regeneratePrep(meal_id) };
 }
 
+export function deleteMealItem({ meal_id, item_id }) {
+  const meal = repo.getMeal(meal_id);
+  if (!meal) throw new AppError(404, 'MEAL_NOT_FOUND', '这顿饭不存在');
+  const changes = repo.deleteMealItem(meal_id, item_id);
+  if (changes === 0) {
+    throw new AppError(404, 'MEAL_ITEM_NOT_FOUND', '这道菜不在当前饭局里');
+  }
+  return {
+    deleted: true,
+    item_id,
+    prep: regeneratePrep(meal_id),
+  };
+}
+
 export function regeneratePrep(mealId) {
   const specs = repo.specsForMeal(mealId);
   const merged = mergeIngredients(specs);
@@ -228,7 +255,20 @@ export function listPrep(mealId) {
   const rows = repo.listPrep(mealId);
   const total = rows.length;
   const prepared = rows.filter((r) => r.prepared === 1).length;
-  return { total, prepared, missing: rows.filter((r) => r.shortage > 0).length, entries: rows };
+  const dishes = repo.listMealItems(mealId).map((item) => ({
+    id: item.id,
+    recipe_name: item.recipe_name,
+    quantity: item.quantity,
+    submitter: item.submitter,
+    note: item.note,
+  }));
+  return {
+    total,
+    prepared,
+    missing: rows.filter((r) => r.shortage > 0).length,
+    dishes,
+    entries: rows,
+  };
 }
 
 export function togglePrep({ meal_id, entry_id, prepared }) {
@@ -274,7 +314,7 @@ export function bulkAddInventory(text, operator = '') {
   const { items, failed } = parseInventoryText(text);
   const saved = [];
   for (const it of items) {
-    const itemId = repo.upsertInventoryItem(it.name, it.quantity, it.unit, operator, '');
+    const itemId = repo.upsertInventoryItem(it.name, 0, it.unit, operator, '');
     const r = repo.applyInventoryOp(itemId, 'add', it.quantity, '整段录入', operator);
     saved.push({ name: it.name, quantity: r.quantity, unit: it.unit });
   }
@@ -282,7 +322,7 @@ export function bulkAddInventory(text, operator = '') {
 }
 
 export function inventoryAdd({ name, quantity, unit, note, operator }) {
-  const itemId = repo.upsertInventoryItem(canonicalName(name), Number(quantity) || 0, normalizeUnit(unit || ''), operator, note);
+  const itemId = repo.upsertInventoryItem(canonicalName(name), 0, normalizeUnit(unit || ''), operator, note);
   return repo.applyInventoryOp(itemId, 'add', Number(quantity) || 0, note, operator);
 }
 

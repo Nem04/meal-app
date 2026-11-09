@@ -168,6 +168,8 @@ async function handleMeals(method, seg, req, res, q) {
     guardChef(req);
     return created(res, svc.openMeal({ ...b, created_by: req.member.name }));
   }
+  if (id && seg[2] === 'prep' && method === 'GET') return ok(res, svc.listPrep(id));
+  if (id && seg[2] === 'log' && !seg[3] && method === 'GET') return ok(res, svc.getMealWithPrep(id).log);
   if (id && !seg[2] && method === 'GET') return ok(res, svc.getMealWithPrep(id));
   if (id && seg[2] === 'items' && method === 'POST') {
     const body = await readBody(req);
@@ -178,16 +180,21 @@ async function handleMeals(method, seg, req, res, q) {
       submitter: req.member.name,
     }));
   }
-  if (id && seg[2] === 'prep' && method === 'GET') return ok(res, svc.listPrep(id));
   if (id && seg[2] === 'prep' && seg[3] && method === 'PATCH') {
     const b = await readBody(req);
     guardChef(req);
     return ok(res, svc.togglePrep({ meal_id: id, entry_id: seg[3], prepared: !!b.prepared }));
   }
-  if (id && seg[2] === 'prep' && !seg[3] && method === 'PATCH') return ok(res, svc.regeneratePrep(id));
+  if (id && seg[2] === 'prep' && !seg[3] && method === 'PATCH') {
+    guardChef(req);
+    return ok(res, svc.regeneratePrep(id));
+  }
+  if (id && seg[2] === 'items' && seg[3] && method === 'DELETE') {
+    guardChef(req);
+    return ok(res, svc.deleteMealItem({ meal_id: id, item_id: seg[3] }));
+  }
   if (id && !seg[2] && method === 'DELETE') { guardChef(req); return ok(res, svc.deleteMeal(id, config.dataDir)); }
   if (id && seg[2] === 'close' && method === 'PATCH') { guardChef(req); return ok(res, svc.closeMeal(id)); }
-  if (id && seg[2] === 'log' && !seg[3] && method === 'GET') return ok(res, svc.getMealWithPrep(id).log);
   if (id && seg[2] === 'log' && !seg[3] && method === 'POST') {
     const b = await readBody(req);
     return created(res, svc.saveMealLog({ meal_id: id, ...b }));
@@ -219,8 +226,8 @@ async function handleRecipes(method, seg, req, res, q) {
     guardChef(req);
     return ok(res, svc.overwriteVersion({ versionId: seg[3], ...b }));
   }
-  if (id && method === 'DELETE') { guardChef(req); return ok(res, svc.deleteRecipe(id)); }
-  if (id && method === 'GET') return ok(res, svc.getRecipeDetail(id));
+  if (id && !seg[2] && method === 'DELETE') { guardChef(req); return ok(res, svc.deleteRecipe(id)); }
+  if (id && !seg[2] && method === 'GET') return ok(res, svc.getRecipeDetail(id));
   fail(res, 404, '没有这个菜谱接口');
 }
 

@@ -44,11 +44,17 @@ test('两位成员点同一道菜时保留两条提交审计记录', () => {
     note: '多放葱',
   });
 
-  assert.equal(repo.listMealItems(meal.id).length, 1);
+  const items = repo.listMealItems(meal.id);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].quantity, 2, '两位成员各点一份时菜品数量应合并为 2');
   const submissions = repo.listMealSubmissions(meal.id);
   assert.equal(submissions.length, 2);
   assert.deepEqual(
     submissions.map((item) => item.member_name_snapshot).sort(),
     ['妈妈', '爸爸'],
   );
+
+  const prep = svc.listPrep(meal.id);
+  assert.equal(prep.entries.find((entry) => entry.canonical_name === '番茄').total_quantity, 4);
+  assert.equal(prep.entries.find((entry) => entry.canonical_name === '鸡蛋').total_quantity, 6);
 });

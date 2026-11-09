@@ -57,6 +57,9 @@ before(async () => {
 
 afterEach(() => {
   nextOpenid = 'openid-chef';
+  repo.db()
+    .prepare("UPDATE meal SET status = 'closed', closed_at = ? WHERE status = 'open'")
+    .run(new Date().toISOString());
 });
 
 after(async () => {
@@ -397,4 +400,307 @@ test('家人通过 HTTP 输入主厨码升级后获得主厨权限', async () =>
     body: JSON.stringify({ title: '升级后开饭' }),
   });
   assert.equal(meal.status, 201);
+});
+
+test('家人不能删除已点菜品，主厨删除后同步清理备菜', async () => {
+  setName('member-chef', '删除主厨');
+  setName('member-family', '删除家人');
+  const chefToken = mintSession('member-chef');
+  const familyToken = mintSession('member-family');
+
+  const mealResp = await fetch(`${baseUrl}/meals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${chefToken}` },
+    body: JSON.stringify({ title: '删除菜品测试', meal_date: '2026-11-09' }),
+  });
+  const meal = (await mealResp.json()).data;
+
+  const orderResp = await fetch(`${baseUrl}/meals/${meal.id}/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${familyToken}` },
+    body: JSON.stringify({ recipe_version_id: 'recipe-seed-001-v1' }),
+  });
+  assert.equal(orderResp.status, 201);
+  const itemId = repo.listMealItems(meal.id)[0].id;
+
+  const denied = await fetch(`${baseUrl}/meals/${meal.id}/items/${itemId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${familyToken}` },
+  });
+  assert.equal(denied.status, 403);
+  assert.equal(repo.listMealItems(meal.id).length, 1);
+
+  const deleted = await fetch(`${baseUrl}/meals/${meal.id}/items/${itemId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${chefToken}` },
+  });
+  assert.equal(deleted.status, 200);
+  assert.equal((await deleted.json()).data.deleted, true);
+  assert.ok(repo.getMeal(meal.id), '删除菜品不应删除整顿饭');
+  assert.deepEqual(repo.listMealItems(meal.id), []);
+  assert.deepEqual(repo.listMealSubmissions(meal.id), []);
+  assert.deepEqual(repo.listPrep(meal.id), []);
+});
+
+test('备菜 GET 接口直接返回 dishes 和 entries', async () => {
+  setName('member-chef', '备菜主厨');
+  const chefToken = mintSession('member-chef');
+
+  const mealResp = await fetch(`${baseUrl}/meals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${chefToken}` },
+    body: JSON.stringify({ title: '备菜接口测试', meal_date: '2026-11-10' }),
+  });
+  const meal = (await mealResp.json()).data;
+
+  const orderResp = await fetch(`${baseUrl}/meals/${meal.id}/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${chefToken}` },
+    body: JSON.stringify({ recipe_version_id: 'recipe-seed-001-v1' }),
+  });
+  assert.equal(orderResp.status, 201);
+
+  const prepResp = await fetch(`${baseUrl}/meals/${meal.id}/prep`, {
+    headers: { Authorization: `Bearer ${chefToken}` },
+  });
+  assert.equal(prepResp.status, 200);
+  const prep = (await prepResp.json()).data;
+  assert.equal(Array.isArray(prep.dishes), true);
+  assert.equal(prep.dishes[0].recipe_name, '番茄炒蛋');
+  assert.equal(Array.isArray(prep.entries), true);
+  assert.ok(prep.entries.length > 0);
+});
+
+test('未知饭局子路径不能误删整顿饭', async () => {
+  setName('member-chef', '路径主厨');
+  const chefToken = mintSession('member-chef');
+  const mealResp = await fetch(`${baseUrl}/meals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${chefToken}` },
+    body: JSON.stringify({ title: '路由保护测试', meal_date: '2026-11-10' }),
+  });
+  const meal = (await mealResp.json()).data;
+
+  const response = await fetch(`${baseUrl}/meals/${meal.id}/unknown`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${chefToken}` },
+  });
+
+  assert.equal(response.status, 404);
+  assert.ok(repo.getMeal(meal.id), '未知子路径不应删除整顿饭');
+});
+
+test('家人不能重新生成备菜清单', async () => {
+  setName('member-chef', '备菜权限主厨');
+  setName('member-family', '备菜权限家人');
+  const chefToken = mintSession('member-chef');
+  const familyToken = mintSession('member-family');
+  const mealResp = await fetch(`${baseUrl}/meals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${chefToken}` },
+    body: JSON.stringify({ title: '备菜权限测试', meal_date: '2026-11-10' }),
+  });
+  const meal = (await mealResp.json()).data;
+
+  const response = await fetch(`${baseUrl}/meals/${meal.id}/prep`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${familyToken}` },
+  });
+
+  assert.equal(response.status, 403);
+});
+
+test('未知菜谱子路径不能误删菜谱', async () => {
+  setName('member-chef', '菜谱路径主厨');
+  const chefToken = mintSession('member-chef');
+  const recipeResp = await fetch(`${baseUrl}/recipes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${chefToken}` },
+    body: JSON.stringify({ name: '路由保护菜谱', category: '其他', steps: '', specs: [] }),
+  });
+  const recipe = (await recipeResp.json()).data;
+
+  const response = await fetch(`${baseUrl}/recipes/${recipe.recipe_id}/unknown`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${chefToken}` },
+  });
+
+  assert.equal(response.status, 404);
+  assert.ok(repo.getRecipe(recipe.recipe_id), '未知子路径不应删除菜谱');
+});
+
+test('饭局全流程接口契约：开饭、点菜、备菜、结束、日志和删除', async () => {
+  setName('member-chef', '流程主厨');
+  setName('member-family', '流程家人');
+  const chefToken = mintSession('member-chef');
+  const familyToken = mintSession('member-family');
+  const chefHeaders = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${chefToken}`,
+  };
+  const familyHeaders = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${familyToken}`,
+  };
+
+  const mealResp = await fetch(`${baseUrl}/meals`, {
+    method: 'POST',
+    headers: chefHeaders,
+    body: JSON.stringify({ title: '全流程饭局' }),
+  });
+  assert.equal(mealResp.status, 201);
+  const meal = (await mealResp.json()).data;
+  const now = new Date();
+  const expectedMealDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  assert.equal(meal.meal_date, expectedMealDate);
+
+  const orderResp = await fetch(`${baseUrl}/meals/${meal.id}/items`, {
+    method: 'POST',
+    headers: familyHeaders,
+    body: JSON.stringify({ recipe_version_id: 'recipe-seed-001-v1' }),
+  });
+  assert.equal(orderResp.status, 201);
+
+  const prepResp = await fetch(`${baseUrl}/meals/${meal.id}/prep`, {
+    headers: chefHeaders,
+  });
+  const prep = (await prepResp.json()).data;
+  assert.equal(prep.dishes[0].recipe_name, '番茄炒蛋');
+
+  const toggleResp = await fetch(`${baseUrl}/meals/${meal.id}/prep/${prep.entries[0].id}`, {
+    method: 'PATCH',
+    headers: chefHeaders,
+    body: JSON.stringify({ prepared: true }),
+  });
+  assert.equal(toggleResp.status, 200);
+  assert.equal((await toggleResp.json()).data.prepared, 1);
+
+  const closeResp = await fetch(`${baseUrl}/meals/${meal.id}/close`, {
+    method: 'PATCH',
+    headers: chefHeaders,
+    body: JSON.stringify({}),
+  });
+  assert.equal(closeResp.status, 200);
+  assert.equal((await closeResp.json()).data.status, 'closed');
+
+  const logResp = await fetch(`${baseUrl}/meals/${meal.id}/log`, {
+    method: 'POST',
+    headers: chefHeaders,
+    body: JSON.stringify({ sentence: '这顿不错', rating: '好吃' }),
+  });
+  assert.equal(logResp.status, 201);
+
+  const getLogResp = await fetch(`${baseUrl}/meals/${meal.id}/log`, {
+    headers: chefHeaders,
+  });
+  assert.equal(getLogResp.status, 200);
+  assert.equal((await getLogResp.json()).data.sentence, '这顿不错');
+
+  const [calendarYear, calendarMonth] = meal.meal_date.split('-').map(Number);
+  const calendarResp = await fetch(`${baseUrl}/calendar?year=${calendarYear}&month=${calendarMonth}`, {
+    headers: chefHeaders,
+  });
+  const calendar = (await calendarResp.json()).data;
+  assert.ok(calendar.days.some((day) => day.id === meal.id));
+
+  const deleteResp = await fetch(`${baseUrl}/meals/${meal.id}`, {
+    method: 'DELETE',
+    headers: chefHeaders,
+  });
+  assert.equal(deleteResp.status, 200);
+  assert.equal(repo.getMeal(meal.id), undefined);
+  assert.equal(repo.getMealLog(meal.id), undefined);
+});
+
+test('菜谱全流程接口契约：新建、另存、编辑、读取和删除', async () => {
+  setName('member-chef', '菜谱流程主厨');
+  const chefToken = mintSession('member-chef');
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${chefToken}`,
+  };
+
+  const createResp = await fetch(`${baseUrl}/recipes`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      name: '接口测试菜谱',
+      category: '其他',
+      steps: '第一步',
+      specs: [{ raw_name: '土豆', quantity: 1, unit: '个' }],
+    }),
+  });
+  assert.equal(createResp.status, 201);
+  const created = (await createResp.json()).data;
+
+  const forkResp = await fetch(`${baseUrl}/recipes/x/versions/${created.version_id}/fork`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({}),
+  });
+  assert.equal(forkResp.status, 201);
+  const forked = (await forkResp.json()).data;
+
+  const updateResp = await fetch(`${baseUrl}/recipes/x/versions/${forked.version_id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({
+      steps: '第二步',
+      specs: [{ raw_name: '土豆', quantity: 2, unit: '个' }],
+    }),
+  });
+  assert.equal(updateResp.status, 200);
+
+  const detailResp = await fetch(`${baseUrl}/recipes/${created.recipe_id}`, {
+    headers,
+  });
+  assert.equal(detailResp.status, 200);
+  const detail = (await detailResp.json()).data;
+  assert.equal(detail.current_version.id, forked.version_id);
+  assert.equal(detail.specs[0].quantity, 2);
+
+  const deleteResp = await fetch(`${baseUrl}/recipes/${created.recipe_id}`, {
+    method: 'DELETE',
+    headers,
+  });
+  assert.equal(deleteResp.status, 200);
+  assert.equal(repo.getRecipe(created.recipe_id), undefined);
+});
+
+test('库存接口契约：批量录入、改库存和删除', async () => {
+  setName('member-chef', '库存流程主厨');
+  const chefToken = mintSession('member-chef');
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${chefToken}`,
+  };
+
+  const bulkResp = await fetch(`${baseUrl}/inventory/bulk`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ text: '芹菜一斤，鸡蛋十个' }),
+  });
+  assert.equal(bulkResp.status, 201);
+  const bulk = (await bulkResp.json()).data;
+  assert.equal(bulk.saved.length, 2);
+
+  const listResp = await fetch(`${baseUrl}/inventory`, { headers });
+  const list = (await listResp.json()).data;
+  const celery = list.find((item) => item.canonical_name === '芹菜');
+  assert.ok(celery);
+
+  const updateResp = await fetch(`${baseUrl}/inventory/${celery.id}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ op: 'stocktake', quantity: 3 }),
+  });
+  assert.equal(updateResp.status, 200);
+  assert.equal((await updateResp.json()).data.quantity, 3);
+
+  const deleteResp = await fetch(`${baseUrl}/inventory/${celery.id}`, {
+    method: 'DELETE',
+    headers,
+  });
+  assert.equal(deleteResp.status, 200);
+  assert.equal(repo.listInventory().some((item) => item.id === celery.id), false);
 });

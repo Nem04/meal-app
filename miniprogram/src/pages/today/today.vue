@@ -18,6 +18,7 @@
           <view class="hero-btn" @tap="goPoint(openMeal.id)">去点菜</view>
           <view class="hero-btn ghost" @tap="goPrep(openMeal.id)">看备菜清单</view>
         </view>
+        <view v-if="isChef" class="end-meal" @tap="finishMeal(openMeal)">结束点菜</view>
       </view>
       <view v-else class="hero">
         <view class="hero-tag">🍳 没有进行中的饭</view>
@@ -46,6 +47,7 @@
 import { request, toast, getMember } from '../../utils/index.js';
 import { ensureLogin, refreshMember } from '../../utils/auth.js';
 import { getGreeting } from '../../utils/greeting.js';
+import { closeMeal } from '../../utils/meal-actions.js';
 
 export default {
   data() {
@@ -119,6 +121,25 @@ export default {
         } catch (e) { toast(e.message); }
       }
     },
+    async finishMeal(meal) {
+      const result = await new Promise((resolve) => {
+        uni.showModal({
+          title: '结束点菜',
+          content: '结束后家人将不能再添加菜，确定吗？',
+          confirmText: '结束',
+          success: resolve,
+          fail: () => resolve({ confirm: false }),
+        });
+      });
+      if (!result.confirm) return;
+      try {
+        await closeMeal(meal.id);
+        toast('点菜已结束');
+        this.meals = await request('/meals');
+      } catch (error) {
+        toast(error.message);
+      }
+    },
     prompt(title, placeholder) {
       return new Promise((resolve) => {
         uni.showModal({
@@ -156,5 +177,6 @@ export default {
 .hero-actions { display: flex; gap: 20rpx; margin-top: 24rpx; }
 .hero-btn { flex:1; text-align:center; border-radius: 20rpx; padding: 20rpx 0; font-size: 28rpx; font-weight:600; background:#fff; color:#4F7A4E; }
 .hero-btn.ghost { background: rgba(255,255,255,.18); color:#fff; }
+.end-meal { margin-top:18rpx; text-align:center; font-size:24rpx; color:#fff; opacity:.9; padding:10rpx 0; }
 .row { display:flex; align-items:center; gap:20rpx; }
 </style>

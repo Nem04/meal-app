@@ -160,6 +160,28 @@ export function listMealItems(mealId) {
   ).all(mealId);
 }
 
+export function deleteMealItem(mealId, itemId) {
+  const d = db();
+  const item = d.prepare(
+    'SELECT recipe_version_id FROM meal_item WHERE id = ? AND meal_id = ?'
+  ).get(itemId, mealId);
+  if (!item) return 0;
+
+  d.exec('BEGIN IMMEDIATE');
+  try {
+    d.prepare(
+      'DELETE FROM meal_item_submission WHERE meal_id = ? AND recipe_version_id = ?'
+    ).run(mealId, item.recipe_version_id);
+    const result = d.prepare('DELETE FROM meal_item WHERE id = ? AND meal_id = ?')
+      .run(itemId, mealId);
+    d.exec('COMMIT');
+    return result.changes;
+  } catch (error) {
+    d.exec('ROLLBACK');
+    throw error;
+  }
+}
+
 export function specsForMeal(mealId) {
   return db().prepare(
     'SELECT s.raw_name, s.canonical_name, s.quantity * i.quantity AS quantity, s.unit ' +
@@ -293,7 +315,7 @@ export function mealsForMonth(year, month) {
     'SELECT m.*, l.sentence, l.rating, ' +
     '(SELECT COUNT(*) FROM meal_log_photo p WHERE p.meal_id = m.id) AS photo_count ' +
     'FROM meal m LEFT JOIN meal_log l ON l.meal_id = m.id ' +
-    'WHERE m.meal_date LIKE ? ORDER BY m.meal_date ASC'
+    "WHERE m.meal_date LIKE ? AND m.status = 'closed' ORDER BY m.meal_date ASC"
   ).all(`${prefix}%`);
 }
 
@@ -468,6 +490,10 @@ export function upsertMealItemWithSubmission({
       note,
       submittedAt,
     });
+    const totalQuantity = d.prepare(
+      'SELECT COALESCE(SUM(quantity), 0) AS total FROM meal_item_submission WHERE meal_id = ? AND recipe_version_id = ?'
+    ).get(mealId, versionId).total;
+    d.prepare('UPDATE meal_item SET quantity = ? WHERE id = ?').run(totalQuantity, itemId);
     d.exec('COMMIT');
     return itemId;
   } catch (error) {

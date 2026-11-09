@@ -13,18 +13,20 @@
     </view>
 
     <view v-if="isChef" class="btn-primary" @tap="fork">另存为我家版 ✨</view>
-    <view v-if="isChef" class="btn-primary" @tap="editIngredients">编辑我家版</view>
+    <view v-if="canEdit" class="btn-primary" @tap="editIngredients">编辑我家版</view>
     <view v-if="isChef" class="btn-primary btn-danger" @tap="del">删除这份菜谱</view>
   </view>
 </template>
 
 <script>
 import { request, toast, getMember } from '../../utils/index.js';
+import { parseIngredientLines } from '../../utils/ingredient-actions.js';
 
 export default {
   data() { return { id: '', recipe: {}, current: null, specs: [], member: null }; },
   computed: {
     isChef() { return this.member && this.member.role === 'chef'; },
+    canEdit() { return this.isChef && this.current && !this.current.is_base; },
   },
   onLoad(options) { this.id = options.id || ''; },
   onShow() { this.member = getMember(); this.load(); },
@@ -48,15 +50,15 @@ export default {
     editIngredients() {
       const texts = this.specs.map((s) => `${s.raw_name} ${s.quantity} ${s.unit}`).join('\n');
       uni.showModal({
-        title: '编辑食材（每行：名称 数量 单位）', editable: true, placeholderText: '鸡蛋 3 个', content: texts,
+        title: '编辑食材（每行：名称+数量+单位）',
+        editable: true,
+        placeholderText: '鸡蛋三个 或 鸡蛋3个',
+        content: texts,
         success: async (res) => {
           if (res.confirm) {
-            const specs = (res.content || '').split(/\n+/).map((line) => {
-              const m = line.trim().match(/^(.+?)\s+(\d+(?:\.\d+)?)\s*(\S*)$/);
-              if (m) return { raw_name: m[1], quantity: Number(m[2]), unit: m[3] || '' };
-              return { raw_name: line.trim(), quantity: 1, unit: '' };
-            }).filter((s) => s.raw_name);
             try {
+              const specs = await parseIngredientLines(res.content || '');
+              if (!specs.length) return toast('没有识别到食材');
               await request(`/recipes/x/versions/${this.current.id}`, 'PUT', { specs, steps: this.current.steps || '' });
               toast('改好啦 ✅（原版不受影响）');
               this.load();
