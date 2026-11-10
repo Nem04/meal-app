@@ -154,7 +154,7 @@ export function upsertMealItem(mealId, versionId, submitter, quantity, note) {
 
 export function listMealItems(mealId) {
   return db().prepare(
-    'SELECT i.*, v.title, r.name AS recipe_name, r.category ' +
+    'SELECT i.*, v.title, r.id AS recipe_id, r.name AS recipe_name, r.category ' +
     'FROM meal_item i JOIN recipe_version v ON v.id = i.recipe_version_id ' +
     'JOIN recipe r ON r.id = v.recipe_id WHERE i.meal_id = ? ORDER BY i.submitted_at ASC'
   ).all(mealId);

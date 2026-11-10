@@ -172,6 +172,16 @@ test('红线T3：同饭同菜重复点菜不新增行', () => {
   assert.equal(items[0].note, '加辣');
 });
 
+test('饭局点菜明细包含稳定的菜谱 ID', () => {
+  const { recipe_id, version_id } = seedRecipeWith('清炒时蔬', [
+    { raw_name: '青菜', quantity: 1, unit: '斤' },
+  ]);
+  const meal = svc.openMeal({ title: '今晚', meal_date: '2026-11-10' });
+  svc.addMealItem({ meal_id: meal.id, recipe_version_id: version_id, submitter: '家人' });
+
+  assert.equal(repo.listMealItems(meal.id)[0].recipe_id, recipe_id);
+});
+
 test('删除未使用过的菜谱', () => {
   const { recipe_id } = seedRecipeWith('凉拌黄瓜', [{ raw_name: '黄瓜', quantity: 1, unit: '根' }]);
   assert.ok(repo.getRecipe(recipe_id), '删除前应存在');
