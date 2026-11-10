@@ -92,6 +92,21 @@ CREATE TABLE IF NOT EXISTS meal_log (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS meal_log_photo (
+  id TEXT PRIMARY KEY,
+  meal_id TEXT NOT NULL REFERENCES meal(id) ON DELETE CASCADE,
+  file_name TEXT NOT NULL UNIQUE,
+  mime_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  created_by_id TEXT NOT NULL,
+  created_by_name TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_meal_log_photo_meal
+ON meal_log_photo(meal_id);
+
 CREATE TABLE IF NOT EXISTS family_member (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -99,4 +114,34 @@ CREATE TABLE IF NOT EXISTS family_member (
   color TEXT NOT NULL DEFAULT '#5B8C5A',
   openid TEXT,
   created_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_family_member_openid
+ON family_member(openid)
+WHERE openid IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS auth_session (
+  token_hash TEXT PRIMARY KEY,
+  member_id TEXT NOT NULL REFERENCES family_member(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_session_member
+ON auth_session(member_id);
+
+CREATE INDEX IF NOT EXISTS idx_auth_session_expires
+ON auth_session(expires_at);
+
+CREATE TABLE IF NOT EXISTS meal_item_submission (
+  id TEXT PRIMARY KEY,
+  meal_id TEXT NOT NULL REFERENCES meal(id) ON DELETE CASCADE,
+  recipe_version_id TEXT NOT NULL REFERENCES recipe_version(id) ON DELETE CASCADE,
+  member_id TEXT NOT NULL REFERENCES family_member(id) ON DELETE CASCADE,
+  member_name_snapshot TEXT NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  note TEXT NOT NULL DEFAULT '',
+  submitted_at TEXT NOT NULL,
+  UNIQUE(meal_id, recipe_version_id, member_id)
 );

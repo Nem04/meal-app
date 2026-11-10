@@ -1,23 +1,13 @@
 <template>
   <view>
-    <!-- 身份 -->
-    <view class="identity" v-if="!member">
-      <view class="card">
-        <view class="section-title">你是谁？</view>
-        <view class="muted" style="margin:0 24rpx 16rpx;">选择身份后，点餐和编辑都会记录是谁操作的。</view>
-        <view v-for="m in members" :key="m.id" class="member-row" @tap="pickMember(m)">
-          <view class="emoji">{{ m.role === 'chef' ? '👨‍🍳' : '👤' }}</view>
-          <view style="flex:1">
-            <view style="font-weight:600">{{ m.name }}</view>
-            <view class="muted">{{ m.role === 'chef' ? '主厨（可编辑）' : '家人（可点餐）' }}</view>
-          </view>
-        </view>
+    <view v-if="member">
+      <view class="hello">
+        {{ greetingLine }}
+        <text class="role-chip">{{ member.role === 'chef' ? '主厨' : '家人' }}</text>
+        <text class="role-action" @tap="goRole">
+          {{ member.role === 'chef' ? '改为家人' : '升级为主厨' }}
+        </text>
       </view>
-    </view>
-
-    <!-- 主内容 -->
-    <view v-else>
-      <view class="hello">你好，{{ member.name }} · {{ member.role === 'chef' ? '主厨' : '家人' }}</view>
 
       <!-- 进行中的饭 -->
       <view v-if="openMeal" class="hero">
@@ -28,6 +18,7 @@
           <view class="hero-btn" @tap="goPoint(openMeal.id)">去点菜</view>
           <view class="hero-btn ghost" @tap="goPrep(openMeal.id)">看备菜清单</view>
         </view>
+        <view v-if="isChef" class="end-meal" @tap="finishMeal(openMeal)">结束点菜</view>
       </view>
       <view v-else class="hero">
         <view class="hero-tag">🍳 没有进行中的饭</view>
@@ -53,36 +44,72 @@
 </template>
 
 <script>
-import { request, toast, getMember, saveMember, isChefNow } from '../../utils/index.js';
+import { request, toast, getMember } from '../../utils/index.js';
+import { ensureLogin, refreshMember } from '../../utils/auth.js';
+import { getGreeting } from '../../utils/greeting.js';
+import { closeMeal } from '../../utils/meal-actions.js';
 
 export default {
   data() {
     return {
-      member: null,
-      members: [],
+      member: getMember(),
+      greeting: getGreeting(),
       meals: [],
     };
   },
   computed: {
     isChef() { return this.member && this.member.role === 'chef'; },
+    greetingLine() {
+      if (!this.member) return this.greeting;
+      const separator = this.greeting.endsWith('～') ? ' ' : '，';
+      return `${this.greeting}${separator}${this.member.name}`;
+    },
     openMeal() { return this.meals.find((m) => m.status === 'open'); },
     closedMeals() { return this.meals.filter((m) => m.status !== 'open').slice(0, 8); },
   },
-  onShow() {
-    this.member = getMember();
-    this.init();
+  async onShow() {
+    this.scheduleGreetingRefresh();
+    try {
+      this.member = await ensureLogin();
+      try {
+        const fresh = await refreshMember();
+        if (fresh) this.member = fresh;
+      } catch (error) {
+        if (error.status === 401) this.member = await ensureLogin(true);
+      }
+      await this.init();
+    } catch (error) {
+      if (error.code !== 'BIND_REQUIRED') toast(error.message);
+    }
+  },
+  onHide() {
+    this.stopGreetingRefresh();
+  },
+  onUnload() {
+    this.stopGreetingRefresh();
   },
   methods: {
+    scheduleGreetingRefresh() {
+      this.stopGreetingRefresh();
+      this.greeting = getGreeting();
+      const delay = 60000 - (Date.now() % 60000) + 50;
+      this.greetingTimer = setTimeout(() => this.scheduleGreetingRefresh(), delay);
+    },
+    stopGreetingRefresh() {
+      if (this.greetingTimer) {
+        clearTimeout(this.greetingTimer);
+        this.greetingTimer = null;
+      }
+    },
+    goRole() {
+      uni.navigateTo({ url: '/pages/role/role' });
+    },
     async init() {
       try {
-        this.members = await request('/members');
         this.meals = await request('/meals');
-      } catch (e) { toast(e.message); }
-    },
-    async pickMember(m) {
-      saveMember(m);
-      this.member = m;
-      await this.init();
+      } catch (error) {
+        toast(error.message);
+      }
     },
     async openMealForm() {
       const title = await this.prompt('开一顿饭', '饭名（默认「今晚这顿饭」）');
@@ -92,6 +119,25 @@ export default {
           toast('这顿饭开好啦 🍳');
           this.meals = await request('/meals');
         } catch (e) { toast(e.message); }
+      }
+    },
+    async finishMeal(meal) {
+      const result = await new Promise((resolve) => {
+        uni.showModal({
+          title: '结束点菜',
+          content: '结束后家人将不能再添加菜，确定吗？',
+          confirmText: '结束',
+          success: resolve,
+          fail: () => resolve({ confirm: false }),
+        });
+      });
+      if (!result.confirm) return;
+      try {
+        await closeMeal(meal.id);
+        toast('点菜已结束');
+        this.meals = await request('/meals');
+      } catch (error) {
+        toast(error.message);
       }
     },
     prompt(title, placeholder) {
@@ -115,12 +161,12 @@ export default {
 </script>
 
 <style>
-.identity { padding-top: 20rpx; }
-.member-row {
-  display: flex; align-items: center; gap: 20rpx;
-  padding: 20rpx; border-bottom: 1rpx solid #EFE7DC;
+.hello { margin: 20rpx 24rpx 0; font-size: 26rpx; color: #8A8077; display: flex; align-items: center; gap: 12rpx; }
+.role-chip {
+  background: #EAF2E7; color: #4F7A4E; font-size: 22rpx;
+  padding: 2rpx 16rpx; border-radius: 999rpx;
 }
-.hello { margin: 20rpx 24rpx 0; font-size: 26rpx; color: #8A8077; }
+.role-action { color: #D96A3B; font-size: 24rpx; margin-left: auto; padding: 4rpx 10rpx; }
 .hero {
   background: linear-gradient(135deg, #5B8C5A, #72A06D);
   color: #fff; border-radius: 26rpx; padding: 32rpx; margin: 20rpx 24rpx;
@@ -131,5 +177,6 @@ export default {
 .hero-actions { display: flex; gap: 20rpx; margin-top: 24rpx; }
 .hero-btn { flex:1; text-align:center; border-radius: 20rpx; padding: 20rpx 0; font-size: 28rpx; font-weight:600; background:#fff; color:#4F7A4E; }
 .hero-btn.ghost { background: rgba(255,255,255,.18); color:#fff; }
+.end-meal { margin-top:18rpx; text-align:center; font-size:24rpx; color:#fff; opacity:.9; padding:10rpx 0; }
 .row { display:flex; align-items:center; gap:20rpx; }
 </style>

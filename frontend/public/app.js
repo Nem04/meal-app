@@ -17,9 +17,6 @@ function saveMember(m) {
     localStorage.setItem(MEMBER_KEY + ':info', JSON.stringify(m));
   } catch {}
 }
-function clearMember() {
-  try { localStorage.removeItem(MEMBER_KEY); localStorage.removeItem(MEMBER_KEY + ':info'); } catch {}
-}
 function isChefNow() { const m = currentMember(); return m && m.role === 'chef'; }
 
 const view = document.getElementById('view');
@@ -90,14 +87,28 @@ function render(t) {
   if (t === 'log') return renderLog();
 }
 
+function greetingFor(hour) {
+  if (hour < 5) return '夜深了，早点休息～';
+  if (hour < 11) return '早上好';
+  if (hour < 14) return '中午好';
+  if (hour < 18) return '下午好';
+  return '傍晚好';
+}
+
+function updateIdentityBadge(member) {
+  const greet = document.getElementById('greet');
+  if (!greet) return;
+  const greeting = greetingFor(new Date().getHours());
+  if (!member) {
+    greet.textContent = greeting;
+    return;
+  }
+  const separator = greeting.endsWith('～') ? ' ' : '，';
+  greet.innerHTML = `${greeting}${separator}${esc(member.name)} <span class="role-chip">${member.role === 'chef' ? '主厨' : '家人'}</span>`;
+}
+
 function setGreet() {
-  const h = new Date().getHours();
-  let g = '傍晚好，今晚想吃什么？';
-  if (h < 5) g = '夜深了，早点休息～';
-  else if (h < 11) g = '早上好，今天吃点什么？';
-  else if (h < 14) g = '中午好，午饭吃了吗？';
-  else if (h < 18) g = '下午好，晚上想吃什么？';
-  document.getElementById('greet').textContent = g;
+  updateIdentityBadge(currentMember());
 }
 
 // ---------- 今天吃啥 ----------
@@ -593,6 +604,10 @@ window.doLeaveLog = async function(mealId) {
 
 // ---------- 启动 ----------
 setGreet();
+setInterval(setGreet, 60000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) setGreet();
+});
 tabs.forEach((t) => t.addEventListener('click', () => render(t.dataset.tab)));
 initIdentity();
 
@@ -640,14 +655,4 @@ window.addNewMember = async function() {
   updateIdentityBadge(m);
   toast(`你好，${m.name} 👋`);
   render('today');
-};
-
-function updateIdentityBadge(m) {
-  const greet = document.getElementById('greet');
-  if (greet) greet.innerHTML = `${esc(m.name)} · ${m.role === 'chef' ? '主厨' : '家人'} <button class="tab" onclick="switchIdentity()" style="display:inline;border:none;background:none;font-size:12px;color:var(--ink2);cursor:pointer">切换</button>`;
-}
-
-window.switchIdentity = function() {
-  clearMember();
-  showIdentityPicker();
 };

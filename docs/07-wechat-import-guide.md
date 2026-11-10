@@ -22,19 +22,20 @@
 1. 微信开发者工具右上角「**详情**」→「**本地设置**」；
 2. 勾选「**不校验合法域名、web-view（业务域名）、TLS 版本以及 HTTPS 证书**」。
 
-> 这一步在 `manifest.json` 的 `mp-weixin.setting.urlCheck: false` 已预设，通常导入即生效；如仍拦截，手动勾选一次。
+> `manifest.json` 的 `mp-weixin.setting.urlCheck` 已预设为 `true`，用于正式环境的合法域名校验，不要改为 `false`。开发阶段如被域名校验拦截，只在微信开发者工具「本地设置」中临时勾选上述选项，不要把临时开关写回 manifest。
 
 ## 三、真机预览
 
 1. 手机和电脑连**同一个 WiFi**。
-2. 修改 `miniprogram/src/utils/index.js` 第一行：
+2. 修改 `miniprogram/src/utils/http.js` 中的 `DEV_BASE_URL`：
    ```js
-   export const BASE_URL = 'http://localhost:8080';
+   const DEV_BASE_URL = 'http://localhost:8080';
    ```
    改成电脑的局域网地址：
    ```js
-   export const BASE_URL = 'http://192.168.5.2:8080';
+   const DEV_BASE_URL = 'http://192.168.5.2:8080';
    ```
+   正式环境请改为 `https://api.<真实域名>`，并同步更新 `PROD_BASE_URL`；保持 `DEV_BASE_URL` / `PROD_BASE_URL` 两个常量。
 3. 在命令行重新编译到微信小程序：
    ```powershell
    cd D:\NemoFile\meal-app\miniprogram
@@ -52,6 +53,16 @@ npm run build:mp-weixin # 生产构建（会自动生成 dist/build/mp-weixin）
 > 注意：本机测试 `npm` 不在 PATH 里，请用完整路径
 > `C:\Program Files\nodejs\npm.cmd`，或先执行
 > `$env:Path += ";C:\Program Files\nodejs"`。
+
+## 正式环境
+
+- 使用正式 AppID，不要把 AppSecret 写入小程序。
+- request 合法域名必须是 `https://api.<域名>`。
+- 正式构建必须设置 `urlCheck: true`。
+- 首次进入按角色输入主厨口令或家庭邀请码。
+- 主厨码和家人码都可以供多个微信使用；主厨码会授予主厨权限，请只发给家庭成员。
+- 每个微信首次绑定都需要填写自己的显示名，以便区分点菜和操作记录。
+- 首页身份栏可以输入对应验证码调整角色；最后一个主厨不能切换为家人。
 
 ## 五、接下来（第二步，可选再做）
 

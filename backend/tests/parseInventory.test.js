@@ -16,6 +16,15 @@ test('数字形式：鸡蛋10个', () => {
   assert.deepEqual([i.name, i.quantity, i.unit], ['鸡蛋', 10, '个']);
 });
 
+test('无空格中文和数字数量：鸡蛋三个、鸡蛋3个', () => {
+  const { items, failed } = parseInventoryText('鸡蛋三个\n鸡蛋3个');
+  assert.deepEqual(failed, []);
+  assert.deepEqual(
+    items.map((item) => [item.raw_name, item.quantity, item.unit]),
+    [['鸡蛋', 3, '个'], ['鸡蛋', 3, '个']],
+  );
+});
+
 test('半瓶归一化', () => {
   const [i] = parseInventoryText('酱油半瓶').items;
   assert.deepEqual([i.name, i.quantity, i.unit], ['酱油', 0.5, '瓶']);

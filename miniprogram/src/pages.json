@@ -1,12 +1,65 @@
 {
   "pages": [
-    { "path": "pages/today/today", "style": { "navigationBarTitleText": "今天吃啥" } },
-    { "path": "pages/recipes/recipes", "style": { "navigationBarTitleText": "菜谱" } },
-    { "path": "pages/inventory/inventory", "style": { "navigationBarTitleText": "库存" } },
-    { "path": "pages/log/log", "style": { "navigationBarTitleText": "日志" } },
-    { "path": "pages/point/point", "style": { "navigationBarTitleText": "加一道菜" } },
-    { "path": "pages/prep/prep", "style": { "navigationBarTitleText": "备菜清单" } },
-    { "path": "pages/recipe/recipe", "style": { "navigationBarTitleText": "菜谱详情" } }
+    {
+      "path": "pages/today/today",
+      "style": {
+        "navigationBarTitleText": "今天吃啥"
+      }
+    },
+    {
+      "path": "pages/recipes/recipes",
+      "style": {
+        "navigationBarTitleText": "菜谱"
+      }
+    },
+    {
+      "path": "pages/inventory/inventory",
+      "style": {
+        "navigationBarTitleText": "库存"
+      }
+    },
+    {
+      "path": "pages/log/log",
+      "style": {
+        "navigationBarTitleText": "日志"
+      }
+    },
+    {
+      "path": "pages/log-edit/log-edit",
+      "style": {
+        "navigationBarTitleText": "这顿留句话"
+      }
+    },
+    {
+      "path": "pages/point/point",
+      "style": {
+        "navigationBarTitleText": "加一道菜"
+      }
+    },
+    {
+      "path": "pages/prep/prep",
+      "style": {
+        "navigationBarTitleText": "备菜清单"
+      }
+    },
+    {
+      "path": "pages/recipe/recipe",
+      "style": {
+        "navigationBarTitleText": "菜谱详情"
+      }
+    },
+    {
+      "path": "pages/bind/bind",
+      "style": {
+        "navigationBarTitleText": "绑定家庭成员"
+      }
+    },
+    {
+      "path": "pages/role/role",
+      "style": {
+        "navigationBarTitleText": "调整身份"
+      }
+    }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
@@ -20,10 +73,30 @@
     "backgroundColor": "#FFFDF9",
     "borderStyle": "white",
     "list": [
-      { "pagePath": "pages/today/today", "text": "今天吃啥" },
-      { "pagePath": "pages/recipes/recipes", "text": "菜谱" },
-      { "pagePath": "pages/inventory/inventory", "text": "库存" },
-      { "pagePath": "pages/log/log", "text": "日志" }
+      {
+        "pagePath": "pages/today/today",
+        "text": "今天吃啥",
+        "iconPath": "static/tabbar/tab-today.png",
+        "selectedIconPath": "static/tabbar/tab-today-active.png"
+      },
+      {
+        "pagePath": "pages/recipes/recipes",
+        "text": "菜谱",
+        "iconPath": "static/tabbar/tab-recipes.png",
+        "selectedIconPath": "static/tabbar/tab-recipes-active.png"
+      },
+      {
+        "pagePath": "pages/inventory/inventory",
+        "text": "库存",
+        "iconPath": "static/tabbar/tab-inventory.png",
+        "selectedIconPath": "static/tabbar/tab-inventory-active.png"
+      },
+      {
+        "pagePath": "pages/log/log",
+        "text": "日志",
+        "iconPath": "static/tabbar/tab-log.png",
+        "selectedIconPath": "static/tabbar/tab-log-active.png"
+      }
     ]
   }
 }

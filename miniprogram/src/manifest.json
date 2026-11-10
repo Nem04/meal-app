@@ -1,6 +1,6 @@
 {
     "name" : "",
-    "appid" : "",
+    "appid" : "你的小程序AppID",
     "description" : "",
     "versionName" : "1.0.0",
     "versionCode" : "100",
@@ -50,9 +50,9 @@
     "quickapp" : {},
     /* 小程序特有相关 */
     "mp-weixin" : {
-        "appid" : "",
+        "appid" : "你的小程序AppID",
         "setting" : {
-            "urlCheck" : false
+            "urlCheck" : true
         },
         "usingComponents" : true
     },

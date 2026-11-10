@@ -3,6 +3,21 @@ import * as repo from './repo.js';
 import { mergeIngredients } from './domain/merge.js';
 import { parseInventoryText } from './domain/parseInventory.js';
 import { canonicalName, normalizeUnit } from './domain/canonical.js';
+import { AppError } from './errors.js';
+import { config } from './config.js';
+import { verifyBindCode } from './auth/passcode.js';
+import { hashSessionToken, newSessionToken, sessionExpiresAt } from './auth/session.js';
+import { createAttemptLimiter } from './auth/rateLimit.js';
+import { uuid } from './util.js';
+import {
+  MAX_LOG_PHOTOS_PER_MEAL,
+  saveLogPhotoFile,
+  deleteLogPhotoFile,
+} from './media/logPhotoStore.js';
+
+export function healthCheck() {
+  repo.db().prepare('SELECT 1').get();
+}
 
 // ---------- 菜品 / 菜谱 ----------
 export function listRecipes(category) {
@@ -50,6 +65,9 @@ export function forkRecipeVersion(versionId) {
 export function overwriteVersion({ versionId, title = '', steps = '', specs = [] }) {
   const v = repo.getVersion(versionId);
   if (!v) throw new Error('版本不存在');
+  if (v.is_base === 1) {
+    throw new AppError(409, 'BASE_VERSION_READONLY', '基础菜谱不能直接修改，请先另存为我家版');
+  }
   // copy-on-write：编辑只改该版本，绝不触碰 fork 源。
   repo.setVersionSteps(versionId, steps);
   if (title) repo.updateVersionTitle(versionId, title);
@@ -77,9 +95,19 @@ export function listMeals() {
   return repo.listMeals();
 }
 
-export function openMeal({ title, meal_date, created_by }) {
+function localDateString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function openMeal({ title, meal_date, created_by }, now = new Date()) {
   if (!title) title = '今晚这顿饭';
-  if (!meal_date) meal_date = new Date().toISOString().slice(0, 10);
+  if (!meal_date) meal_date = localDateString(now);
+  if (repo.listMeals().some((meal) => meal.status === 'open')) {
+    throw new AppError(409, 'OPEN_MEAL_EXISTS', '已有进行中的饭，请先结束');
+  }
   const id = repo.insertMeal(title, meal_date, created_by);
   return getMealDetail(id);
 }
@@ -95,18 +123,117 @@ export function getMealWithPrep(mealId) {
 function getMealDetail(id) {
   const meal = repo.getMeal(id);
   if (!meal) return null;
-  return { ...meal, items: repo.listMealItems(id) };
+  return {
+    ...meal,
+    items: repo.listMealItems(id),
+    submissions: repo.listMealSubmissions(id),
+  };
 }
 
-export function addMealItem({ meal_id, recipe_version_id, submitter = '家人', quantity = 1, note = '' }) {
+export function listMealLogPhotos(mealId) {
+  return repo.listMealLogPhotos(mealId).map((photo) => ({
+    id: photo.id,
+    url: `/media/log-photos/${photo.file_name}`,
+    mimeType: photo.mime_type,
+    sizeBytes: photo.size_bytes,
+    createdAt: photo.created_at,
+    createdBy: photo.created_by_name,
+    createdById: photo.created_by_id,
+  }));
+}
+
+export function addMealLogPhoto({ meal_id, base64, mimeType, member, dataDir = config.dataDir }) {
   const meal = repo.getMeal(meal_id);
-  if (!meal) throw new Error('这顿饭不存在');
-  if (meal.status !== 'open') throw new Error('这顿饭已经结束了');
-  if (!repo.getVersion(recipe_version_id)) throw new Error('菜谱版本不存在');
-  // 去重：同一顿饭里同一道菜只保留一行，重复点只更新备注。
-  repo.upsertMealItem(meal_id, recipe_version_id, submitter, Number(quantity) || 1, note);
-  const result = regeneratePrep(meal_id);
-  return { meal: getMealDetail(meal_id), prep: result };
+  if (!meal) throw new AppError(404, 'MEAL_NOT_FOUND', '这顿饭不存在');
+  if (repo.countMealLogPhotos(meal_id) >= MAX_LOG_PHOTOS_PER_MEAL) {
+    throw new AppError(409, 'PHOTO_LIMIT_EXCEEDED', '每顿饭最多 3 张照片');
+  }
+  const saved = saveLogPhotoFile({ dataDir, base64, declaredMime: mimeType });
+  const id = uuid();
+  const createdAt = new Date().toISOString();
+  try {
+    repo.insertMealLogPhoto({
+      id,
+      mealId: meal_id,
+      fileName: saved.fileName,
+      mimeType: saved.mimeType,
+      sizeBytes: saved.sizeBytes,
+      createdById: member.id,
+      createdByName: member.name,
+      createdAt,
+    });
+  } catch (error) {
+    deleteLogPhotoFile({ dataDir, fileName: saved.fileName });
+    throw error;
+  }
+  return {
+    id,
+    url: `/media/log-photos/${saved.fileName}`,
+    mimeType: saved.mimeType,
+    sizeBytes: saved.sizeBytes,
+    createdAt,
+    createdBy: member.name,
+    createdById: member.id,
+  };
+}
+
+export function deleteMealLogPhoto({ meal_id, photo_id, member, dataDir = config.dataDir }) {
+  const photo = repo.getMealLogPhoto(meal_id, photo_id);
+  if (!photo) throw new AppError(404, 'PHOTO_NOT_FOUND', '照片不存在');
+  if (member.role !== 'chef' && member.id !== photo.created_by_id) {
+    throw new AppError(403, 'FORBIDDEN', '只能删除自己上传的照片');
+  }
+  deleteLogPhotoFile({ dataDir, fileName: photo.file_name });
+  const changes = repo.deleteMealLogPhoto(meal_id, photo_id);
+  if (changes === 0) throw new AppError(404, 'PHOTO_NOT_FOUND', '照片不存在');
+  return { deleted: true, photo_id };
+}
+
+export function addMealItem({
+  meal_id,
+  recipe_version_id,
+  member = null,
+  submitter = '家人',
+  quantity = 1,
+  note = '',
+}) {
+  const meal = repo.getMeal(meal_id);
+  if (!meal) throw new AppError(404, 'MEAL_NOT_FOUND', '这顿饭不存在');
+  if (meal.status !== 'open') throw new AppError(409, 'MEAL_CLOSED', '这顿饭已经结束了');
+  if (!repo.getVersion(recipe_version_id)) {
+    throw new AppError(404, 'RECIPE_VERSION_NOT_FOUND', '菜谱版本不存在');
+  }
+  const actorName = member ? member.name : submitter;
+  const actorId = member ? member.id : '';
+  const amount = Number(quantity) || 1;
+  if (actorId) {
+    repo.upsertMealItemWithSubmission({
+      mealId: meal_id,
+      versionId: recipe_version_id,
+      memberId: actorId,
+      memberName: actorName,
+      quantity: amount,
+      note,
+      submittedAt: new Date().toISOString(),
+    });
+  } else {
+    repo.upsertMealItem(meal_id, recipe_version_id, actorName, amount, note);
+  }
+  return { meal: getMealDetail(meal_id), prep: regeneratePrep(meal_id) };
+}
+
+export function deleteMealItem({ meal_id, item_id }) {
+  const meal = repo.getMeal(meal_id);
+  if (!meal) throw new AppError(404, 'MEAL_NOT_FOUND', '这顿饭不存在');
+  const changes = repo.deleteMealItem(meal_id, item_id);
+  if (changes === 0) {
+    throw new AppError(404, 'MEAL_ITEM_NOT_FOUND', '这道菜不在当前饭局里');
+  }
+  return {
+    deleted: true,
+    item_id,
+    prep: regeneratePrep(meal_id),
+  };
 }
 
 export function regeneratePrep(mealId) {
@@ -139,7 +266,20 @@ export function listPrep(mealId) {
   const rows = repo.listPrep(mealId);
   const total = rows.length;
   const prepared = rows.filter((r) => r.prepared === 1).length;
-  return { total, prepared, missing: rows.filter((r) => r.shortage > 0).length, entries: rows };
+  const dishes = repo.listMealItems(mealId).map((item) => ({
+    id: item.id,
+    recipe_name: item.recipe_name,
+    quantity: item.quantity,
+    submitter: item.submitter,
+    note: item.note,
+  }));
+  return {
+    total,
+    prepared,
+    missing: rows.filter((r) => r.shortage > 0).length,
+    dishes,
+    entries: rows,
+  };
 }
 
 export function togglePrep({ meal_id, entry_id, prepared }) {
@@ -149,11 +289,18 @@ export function togglePrep({ meal_id, entry_id, prepared }) {
   return listPrep(meal_id);
 }
 
-export function deleteMeal(mealId) {
+export function deleteMeal(mealId, dataDir = config.dataDir) {
   const meal = repo.getMeal(mealId);
   if (!meal) throw new Error('这顿饭不存在');
-  // 日志等关联记录由外键级联删除（meal_log ON DELETE CASCADE）。
+  const photos = repo.listMealLogPhotos(mealId);
   const changes = repo.deleteMeal(mealId);
+  for (const photo of photos) {
+    try {
+      deleteLogPhotoFile({ dataDir, fileName: photo.file_name });
+    } catch (error) {
+      console.error(`删除照片文件失败: ${photo.file_name}: ${error?.message || error}`);
+    }
+  }
   return { deleted: changes > 0, meal_id: mealId };
 }
 
@@ -178,7 +325,7 @@ export function bulkAddInventory(text, operator = '') {
   const { items, failed } = parseInventoryText(text);
   const saved = [];
   for (const it of items) {
-    const itemId = repo.upsertInventoryItem(it.name, it.quantity, it.unit, operator, '');
+    const itemId = repo.upsertInventoryItem(it.name, 0, it.unit, operator, '');
     const r = repo.applyInventoryOp(itemId, 'add', it.quantity, '整段录入', operator);
     saved.push({ name: it.name, quantity: r.quantity, unit: it.unit });
   }
@@ -186,7 +333,7 @@ export function bulkAddInventory(text, operator = '') {
 }
 
 export function inventoryAdd({ name, quantity, unit, note, operator }) {
-  const itemId = repo.upsertInventoryItem(canonicalName(name), Number(quantity) || 0, normalizeUnit(unit || ''), operator, note);
+  const itemId = repo.upsertInventoryItem(canonicalName(name), 0, normalizeUnit(unit || ''), operator, note);
   return repo.applyInventoryOp(itemId, 'add', Number(quantity) || 0, note, operator);
 }
 
@@ -241,14 +388,140 @@ export function identifyMember(name) {
   return repo.getMemberById(id);
 }
 
+const ROLE_BY_KIND = {
+  chef: 'chef',
+  family: 'member',
+};
+
+const COLOR_BY_ROLE = {
+  chef: '#D96A3B',
+  member: '#5B8C5A',
+};
+
+const defaultBindLimiter = createAttemptLimiter();
+
+export function serializeMember(member) {
+  return { id: member.id, name: member.name, role: member.role, color: member.color };
+}
+
+function normalizeDisplayName(value) {
+  const name = String(value || '').trim();
+  if (!name || [...name].length > 20) {
+    throw new AppError(400, 'INVALID_DISPLAY_NAME', '显示名需为 1 到 20 个字符');
+  }
+  return name;
+}
+
+function issueSession(member, ttlDays) {
+  const token = newSessionToken();
+  const tokenHash = hashSessionToken(token);
+  const createdAt = new Date().toISOString();
+  const expiresAt = sessionExpiresAt(ttlDays);
+  repo.deleteExpiredSessions(createdAt);
+  repo.createAuthSession({ tokenHash, memberId: member.id, createdAt, expiresAt });
+  return { status: 'bound', token, expiresAt, member: serializeMember(member) };
+}
+
+export async function loginWithWechat({ code, wechatClient, appConfig }) {
+  const { openid } = await wechatClient.exchangeCode(code);
+  const member = repo.getMemberByOpenid(openid);
+  if (!member) return { status: 'needs_binding' };
+  return issueSession(member, appConfig.sessionTtlDays);
+}
+
+export function listBoundMembers() {
+  // 服务层序列化边界：任何调用方拿到的都是脱敏后的成员视图，
+  // 不暴露 openid / bound_at / created_at 等字段。
+  return repo.listBoundMembers().map(serializeMember);
+}
+
+export function changeMemberRole({
+  member,
+  kind,
+  inviteCode,
+  appConfig,
+  attemptLimiter = defaultBindLimiter,
+  attemptKeyPrefix = 'unknown',
+}) {
+  const attemptKey = `${attemptKeyPrefix}:role:${member.id}:${kind}`;
+  attemptLimiter.assertAllowed(attemptKey);
+  try {
+    verifyBindCode(kind, inviteCode, appConfig);
+  } catch (error) {
+    if (error.code === 'INVALID_INVITE_CODE') attemptLimiter.recordFailure(attemptKey);
+    throw error;
+  }
+  const role = ROLE_BY_KIND[kind];
+  const updated = repo.changeMemberRole({
+    memberId: member.id,
+    role,
+    color: COLOR_BY_ROLE[role],
+  });
+  attemptLimiter.clear(attemptKey);
+  return serializeMember(updated);
+}
+
+export async function bindWechatMember({
+  code,
+  kind,
+  inviteCode,
+  displayName,
+  wechatClient,
+  appConfig,
+  attemptLimiter = defaultBindLimiter,
+  attemptKeyPrefix = 'unknown',
+}) {
+  const { openid } = await wechatClient.exchangeCode(code);
+  const attemptKey = `${attemptKeyPrefix}:${openid}:${kind}`;
+  attemptLimiter.assertAllowed(attemptKey);
+  try {
+    verifyBindCode(kind, inviteCode, appConfig);
+  } catch (error) {
+    if (error.code === 'INVALID_INVITE_CODE') attemptLimiter.recordFailure(attemptKey);
+    throw error;
+  }
+  const role = ROLE_BY_KIND[kind];
+  const member = repo.bindMemberAccount({
+    openid,
+    role,
+    name: normalizeDisplayName(displayName),
+    color: COLOR_BY_ROLE[role],
+    boundAt: new Date().toISOString(),
+  });
+  attemptLimiter.clear(attemptKey);
+  return issueSession(member, appConfig.sessionTtlDays);
+}
+
+export function authenticateToken(token) {
+  if (!token) throw new AppError(401, 'UNAUTHORIZED', '请先登录');
+  const tokenHash = hashSessionToken(token);
+  const session = repo.getAuthSessionByHash(tokenHash);
+  if (!session) throw new AppError(401, 'UNAUTHORIZED', '登录已失效');
+  if (Date.parse(session.expires_at) <= Date.now()) {
+    repo.deleteAuthSession(tokenHash);
+    throw new AppError(401, 'UNAUTHORIZED', '登录已过期');
+  }
+  const member = repo.getMemberById(session.member_id);
+  if (!member) throw new AppError(401, 'UNAUTHORIZED', '成员不存在');
+  repo.touchAuthSession(tokenHash, new Date().toISOString());
+  return { member, session };
+}
+
+export function logoutToken(token) {
+  if (token) repo.deleteAuthSession(hashSessionToken(token));
+}
+
 export function isChef(memberId) {
   const m = repo.getMemberById(memberId);
   return !!m && m.role === 'chef';
 }
 
-export function guardChef(memberId, action = '该操作') {
-  if (!isChef(memberId)) {
-    throw new Error(`${action}只有主厨才能做`);
+export function guardChef(memberOrId, action = '该操作') {
+  const member = typeof memberOrId === 'string'
+    ? repo.getMemberById(memberOrId)
+    : memberOrId;
+  if (!member || member.role !== 'chef') {
+    throw new AppError(403, 'CHEF_ONLY', `${action}只有主厨才能做`);
   }
 }
 

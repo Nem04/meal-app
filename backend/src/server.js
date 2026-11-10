@@ -1,12 +1,13 @@
-import { createServer } from 'node:http';
+﻿import { createServer } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { URL } from 'node:url';
-import { config } from './config.js';
+import { config, validateAuthConfig } from './config.js';
 import { openDb } from './db.js';
 import { handle } from './routes.js';
-import { serveStatic } from './http.js';
+import { serveStatic, serveLogPhotoFile } from './http.js';
 import { fail } from './util.js';
 
+validateAuthConfig(config);
 openDb();
 
 const server = createServer((req, res) => {
@@ -17,9 +18,14 @@ const server = createServer((req, res) => {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     });
     res.end();
+    return;
+  }
+
+  if (pathname === '/health') {
+    handle(req, res, url);
     return;
   }
 
@@ -39,7 +45,24 @@ const server = createServer((req, res) => {
     return;
   }
 
-  // /api/calendar 等非 /api 前缀的口令态也在 /api 下；其余走静态资源。
+  // 兼容不带 /api 前缀的业务接口（小程序等客户端）。
+  const isBizPath =
+    pathname.startsWith('/meals') ||
+    pathname.startsWith('/recipes') ||
+    pathname.startsWith('/inventory') ||
+    pathname.startsWith('/members') ||
+    pathname.startsWith('/calendar');
+  if (isBizPath) {
+    handle(req, res, url);
+    return;
+  }
+
+  if (pathname.startsWith('/media/log-photos/')) {
+    serveLogPhotoFile(pathname, res, config.dataDir);
+    return;
+  }
+
+  // 其余走静态资源。
   serveStatic(pathname, res);
 });
 

@@ -1,5 +1,6 @@
 // 数据访问层：薄封装 SQLite 读写。业务逻辑不放这里。
 import { openDb } from './db.js';
+import { AppError } from './errors.js';
 
 export function db() { return openDb(); }
 
@@ -153,10 +154,32 @@ export function upsertMealItem(mealId, versionId, submitter, quantity, note) {
 
 export function listMealItems(mealId) {
   return db().prepare(
-    'SELECT i.*, v.title, r.name AS recipe_name, r.category ' +
+    'SELECT i.*, v.title, r.id AS recipe_id, r.name AS recipe_name, r.category ' +
     'FROM meal_item i JOIN recipe_version v ON v.id = i.recipe_version_id ' +
     'JOIN recipe r ON r.id = v.recipe_id WHERE i.meal_id = ? ORDER BY i.submitted_at ASC'
   ).all(mealId);
+}
+
+export function deleteMealItem(mealId, itemId) {
+  const d = db();
+  const item = d.prepare(
+    'SELECT recipe_version_id FROM meal_item WHERE id = ? AND meal_id = ?'
+  ).get(itemId, mealId);
+  if (!item) return 0;
+
+  d.exec('BEGIN IMMEDIATE');
+  try {
+    d.prepare(
+      'DELETE FROM meal_item_submission WHERE meal_id = ? AND recipe_version_id = ?'
+    ).run(mealId, item.recipe_version_id);
+    const result = d.prepare('DELETE FROM meal_item WHERE id = ? AND meal_id = ?')
+      .run(itemId, mealId);
+    d.exec('COMMIT');
+    return result.changes;
+  } catch (error) {
+    d.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 export function specsForMeal(mealId) {
@@ -260,11 +283,39 @@ export function getMealLog(mealId) {
   return db().prepare('SELECT * FROM meal_log WHERE meal_id = ?').get(mealId);
 }
 
+export function insertMealLogPhoto({
+  id, mealId, fileName, mimeType, sizeBytes, createdById, createdByName, createdAt,
+}) {
+  db().prepare(
+    'INSERT INTO meal_log_photo(id,meal_id,file_name,mime_type,size_bytes,created_by_id,created_by_name,created_at) VALUES(?,?,?,?,?,?,?,?)'
+  ).run(id, mealId, fileName, mimeType, sizeBytes, createdById, createdByName, createdAt);
+}
+
+export function countMealLogPhotos(mealId) {
+  return db().prepare('SELECT COUNT(*) AS n FROM meal_log_photo WHERE meal_id = ?').get(mealId).n;
+}
+
+export function listMealLogPhotos(mealId) {
+  return db().prepare(
+    'SELECT id,meal_id,file_name,mime_type,size_bytes,created_by_id,created_by_name,created_at FROM meal_log_photo WHERE meal_id = ? ORDER BY created_at ASC'
+  ).all(mealId);
+}
+
+export function getMealLogPhoto(mealId, photoId) {
+  return db().prepare('SELECT * FROM meal_log_photo WHERE meal_id = ? AND id = ?').get(mealId, photoId);
+}
+
+export function deleteMealLogPhoto(mealId, photoId) {
+  return db().prepare('DELETE FROM meal_log_photo WHERE meal_id = ? AND id = ?').run(mealId, photoId).changes;
+}
+
 export function mealsForMonth(year, month) {
   const prefix = `${year}-${String(month).padStart(2, '0')}`;
   return db().prepare(
-    'SELECT m.*, l.sentence, l.rating FROM meal m LEFT JOIN meal_log l ON l.meal_id = m.id ' +
-    'WHERE m.meal_date LIKE ? ORDER BY m.meal_date ASC'
+    'SELECT m.*, l.sentence, l.rating, ' +
+    '(SELECT COUNT(*) FROM meal_log_photo p WHERE p.meal_id = m.id) AS photo_count ' +
+    'FROM meal m LEFT JOIN meal_log l ON l.meal_id = m.id ' +
+    "WHERE m.meal_date LIKE ? AND m.status = 'closed' ORDER BY m.meal_date ASC"
   ).all(`${prefix}%`);
 }
 
@@ -295,4 +346,158 @@ export function upsertMemberByName(name, role, color) {
   d.prepare('INSERT INTO family_member(id,name,role,color,openid,created_at) VALUES(?,?,?,?,NULL,?)')
     .run(id, name, role, color, t);
   return id;
+}
+
+export function getMemberByOpenid(openid) {
+  return db().prepare('SELECT * FROM family_member WHERE openid = ?').get(openid);
+}
+
+export function bindMemberSlot({ openid, memberId, name, boundAt }) {
+  const d = db();
+  d.exec('BEGIN IMMEDIATE');
+  try {
+    const member = d.prepare('SELECT * FROM family_member WHERE id = ?').get(memberId);
+    if (!member) throw new AppError(404, 'MEMBER_NOT_FOUND', '成员槽位不存在');
+    if (member.openid) throw new AppError(409, 'MEMBER_ALREADY_BOUND', '这个成员槽位已经绑定');
+    const other = d.prepare(
+      'SELECT id FROM family_member WHERE openid = ? AND id <> ?',
+    ).get(openid, memberId);
+    if (other) throw new AppError(409, 'OPENID_ALREADY_BOUND', '这个微信已经绑定其他成员');
+    d.prepare(
+      'UPDATE family_member SET openid = ?, name = ?, bound_at = ? WHERE id = ?',
+    ).run(openid, name, boundAt, memberId);
+    d.exec('COMMIT');
+    return d.prepare('SELECT * FROM family_member WHERE id = ?').get(memberId);
+  } catch (error) {
+    d.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+export function bindMemberAccount({ openid, role, name, color, boundAt }) {
+  const d = db();
+  d.exec('BEGIN IMMEDIATE');
+  try {
+    const existing = d.prepare('SELECT * FROM family_member WHERE openid = ?').get(openid);
+    if (existing) {
+      throw new AppError(409, 'OPENID_ALREADY_BOUND', '这个微信已经绑定家庭成员');
+    }
+    const id = newId();
+    const createdAt = new Date().toISOString();
+    d.prepare(
+      'INSERT INTO family_member(id,name,role,color,openid,bound_at,created_at) VALUES(?,?,?,?,?,?,?)',
+    ).run(id, name, role, color, openid, boundAt, createdAt);
+    d.exec('COMMIT');
+    return d.prepare('SELECT * FROM family_member WHERE id = ?').get(id);
+  } catch (error) {
+    d.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+export function listBoundMembers() {
+  return db().prepare(
+    'SELECT * FROM family_member WHERE openid IS NOT NULL ORDER BY role DESC, created_at ASC',
+  ).all();
+}
+
+export function changeMemberRole({ memberId, role, color }) {
+  const d = db();
+  d.exec('BEGIN IMMEDIATE');
+  try {
+    const member = d.prepare('SELECT * FROM family_member WHERE id = ?').get(memberId);
+    if (!member) throw new AppError(404, 'MEMBER_NOT_FOUND', '成员不存在');
+    if (member.role === 'chef' && role === 'member') {
+      const chefCount = d.prepare(
+        "SELECT COUNT(*) AS n FROM family_member WHERE role = 'chef' AND openid IS NOT NULL",
+      ).get().n;
+      if (chefCount <= 1) {
+        throw new AppError(409, 'LAST_CHEF_REQUIRED', '至少需要保留一名主厨');
+      }
+    }
+    d.prepare('UPDATE family_member SET role = ?, color = ? WHERE id = ?')
+      .run(role, color, memberId);
+    d.exec('COMMIT');
+    return d.prepare('SELECT * FROM family_member WHERE id = ?').get(memberId);
+  } catch (error) {
+    d.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+export function createAuthSession({ tokenHash, memberId, createdAt, expiresAt }) {
+  db().prepare(
+    'INSERT INTO auth_session(token_hash, member_id, created_at, expires_at, last_seen_at) VALUES(?,?,?,?,?)',
+  ).run(tokenHash, memberId, createdAt, expiresAt, createdAt);
+}
+
+export function getAuthSessionByHash(tokenHash) {
+  return db().prepare('SELECT * FROM auth_session WHERE token_hash = ?').get(tokenHash);
+}
+
+export function touchAuthSession(tokenHash, lastSeenAt) {
+  db().prepare('UPDATE auth_session SET last_seen_at = ? WHERE token_hash = ?')
+    .run(lastSeenAt, tokenHash);
+}
+
+export function deleteAuthSession(tokenHash) {
+  return db().prepare('DELETE FROM auth_session WHERE token_hash = ?').run(tokenHash).changes;
+}
+
+export function deleteExpiredSessions(nowIso) {
+  return db().prepare('DELETE FROM auth_session WHERE expires_at <= ?').run(nowIso).changes;
+}
+
+export function upsertMealSubmission({
+  mealId, versionId, memberId, memberName, quantity, note, submittedAt,
+}) {
+  const d = db();
+  const existing = d.prepare(
+    'SELECT id FROM meal_item_submission WHERE meal_id = ? AND recipe_version_id = ? AND member_id = ?',
+  ).get(mealId, versionId, memberId);
+  if (existing) {
+    d.prepare(
+      'UPDATE meal_item_submission SET member_name_snapshot = ?, quantity = ?, note = ?, submitted_at = ? WHERE id = ?',
+    ).run(memberName, quantity, note, submittedAt, existing.id);
+    return existing.id;
+  }
+  const id = newId();
+  d.prepare(
+    'INSERT INTO meal_item_submission(id, meal_id, recipe_version_id, member_id, member_name_snapshot, quantity, note, submitted_at) VALUES(?,?,?,?,?,?,?,?)',
+  ).run(id, mealId, versionId, memberId, memberName, quantity, note, submittedAt);
+  return id;
+}
+
+export function listMealSubmissions(mealId) {
+  return db().prepare(
+    'SELECT id, meal_id, recipe_version_id, member_id, member_name_snapshot, quantity, note, submitted_at FROM meal_item_submission WHERE meal_id = ? ORDER BY submitted_at ASC',
+  ).all(mealId);
+}
+
+export function upsertMealItemWithSubmission({
+  mealId, versionId, memberId, memberName, quantity, note, submittedAt,
+}) {
+  const d = db();
+  d.exec('BEGIN IMMEDIATE');
+  try {
+    const itemId = upsertMealItem(mealId, versionId, memberName, quantity, note);
+    upsertMealSubmission({
+      mealId,
+      versionId,
+      memberId,
+      memberName,
+      quantity,
+      note,
+      submittedAt,
+    });
+    const totalQuantity = d.prepare(
+      'SELECT COALESCE(SUM(quantity), 0) AS total FROM meal_item_submission WHERE meal_id = ? AND recipe_version_id = ?'
+    ).get(mealId, versionId).total;
+    d.prepare('UPDATE meal_item SET quantity = ? WHERE id = ?').run(totalQuantity, itemId);
+    d.exec('COMMIT');
+    return itemId;
+  } catch (error) {
+    d.exec('ROLLBACK');
+    throw error;
+  }
 }
