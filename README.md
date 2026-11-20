@@ -1,5 +1,15 @@
 # 家庭点菜小程序（家庭版微信菜单点菜）
 
+## 目录结构（规划）
+
+```
+meal-app/
+  backend/    # Node + TS + SQLite
+  frontend/   # Vue/React 移动端 SPA
+  docs/       # 产品与设计文档
+  data/       # sqlite 数据与备份
+```
+
 ## 文档导航
 
 | 文档 | 内容 |
@@ -10,7 +20,7 @@
 | `docs/04-backend-architecture.md` | 后端架构与数据设计 |
 | `docs/05-dev-plan.md` | 实施开发计划 |
 
-## 核心红线（一句话记住）
+## 核心
 
 - 食材按「规范名称 + 单位」合并去重，不做隐式单位换算。
 - **勾选「备齐」只改状态，永不扣库存**；库存变化只来自手动加/减/盘点。
@@ -25,13 +35,5 @@
 - [x] 开发计划
 - [ ] 代码实施（待确认方案后从 M0 开始）
 
-## 目录结构（规划）
 
-```
-meal-app/
-  backend/    # Node + TS + SQLite
-  frontend/   # Vue/React 移动端 SPA
-  docs/       # 产品与设计文档
-  data/       # sqlite 数据与备份
-```
 
