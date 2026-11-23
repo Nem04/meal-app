@@ -1,6 +1,8 @@
 import { rawRequest, ApiError } from './http.js';
 import { getToken, setAuth, clearAuth, getStoredMember } from './token.js';
 
+const SIGNED_OUT_KEY = 'family-meal-signed-out';
+
 export function getMember() {
   return getStoredMember();
 }
@@ -48,6 +50,7 @@ export async function bindWechatMember({ kind, inviteCode, displayName }) {
     displayName,
   });
   setAuth(response.data.token, response.data.member);
+  uni.removeStorageSync(SIGNED_OUT_KEY);
   return response.data.member;
 }
 
@@ -71,14 +74,93 @@ export async function refreshMember() {
   return member || null;
 }
 
-export async function ensureLogin(force = false) {
+let authPromise = null;
+
+export function hasExplicitSignOut() {
+  return uni.getStorageSync(SIGNED_OUT_KEY) === '1';
+}
+
+function redirectToPage(url) {
+  let currentRoute = '';
+  try {
+    if (typeof getCurrentPages === 'function') {
+      const pages = getCurrentPages();
+      currentRoute = pages[pages.length - 1]?.route || '';
+    }
+  } catch {}
+  if (currentRoute !== url.replace(/^\//, '')) {
+    uni.reLaunch({ url });
+  }
+}
+
+function redirectToBinding() {
+  redirectToPage('/pages/bind/bind');
+}
+
+function redirectToSwitchWechat() {
+  redirectToPage('/pages/switch-wechat/switch-wechat');
+}
+
+function bindRequiredError() {
+  return new ApiError(403, 'BIND_REQUIRED', '请先登录');
+}
+
+export function bootstrapAuth({ force = false } = {}) {
+  if (!force && hasExplicitSignOut()) {
+    redirectToSwitchWechat();
+    return Promise.reject(bindRequiredError());
+  }
   if (!force && getToken() && getStoredMember()) {
-    return getStoredMember();
+    return Promise.resolve(getStoredMember());
   }
-  const result = await loginWithWechat();
-  if (result.status !== 'bound') {
-    uni.reLaunch({ url: '/pages/bind/bind' });
-    throw new ApiError(403, 'BIND_REQUIRED', '需要绑定家庭成员');
+  if (authPromise) return authPromise;
+
+  if (force) clearAuth();
+
+  const current = (async () => {
+    const result = await loginWithWechat();
+    if (result.status !== 'bound') {
+      redirectToBinding();
+      throw bindRequiredError();
+    }
+    uni.removeStorageSync(SIGNED_OUT_KEY);
+    return result.member;
+  })();
+  authPromise = current;
+  current.then(
+    () => { if (authPromise === current) authPromise = null; },
+    () => { if (authPromise === current) authPromise = null; },
+  );
+  return current;
+}
+
+export function ensureLogin(force = false) {
+  return bootstrapAuth({ force });
+}
+
+export async function switchWechatAccount() {
+  const token = getToken();
+  try {
+    if (token) {
+      await rawRequest('/auth/logout', 'POST', {}, { token });
+    }
+  } catch {
+    // Local sign-out must still complete if the server is temporarily unavailable.
+  } finally {
+    clearAuth();
+    uni.setStorageSync(SIGNED_OUT_KEY, '1');
   }
-  return result.member;
+}
+
+export function exitMiniProgram() {
+  if (typeof wx !== 'undefined' && typeof wx.exitMiniProgram === 'function') {
+    wx.exitMiniProgram({
+      fail() {
+        redirectToSwitchWechat();
+      },
+    });
+    return true;
+  }
+  redirectToSwitchWechat();
+  return false;
 }

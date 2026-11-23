@@ -20,8 +20,8 @@ export function healthCheck() {
 }
 
 // ---------- 菜品 / 菜谱 ----------
-export function listRecipes(category) {
-  return repo.listRecipes(category || '');
+export function listRecipes(category, search = '') {
+  return repo.listRecipes(category || '', search);
 }
 
 export function getRecipeDetail(recipeId) {
@@ -34,9 +34,20 @@ export function getRecipeDetail(recipeId) {
 }
 
 export function createRecipeFromSpecs({ name, category = '其他', steps = '', specs = [] }) {
-  const { recipe_id, version_id } = repo.createRecipe(name, category || '其他', '原创');
+  const { recipe_id, version_id } = repo.createRecipe(name, category || '其他', '原创', false);
   applySpecsToVersion(version_id, steps, specs);
   return { recipe_id, version_id };
+}
+
+const RECIPE_CATEGORIES = new Set(['荤', '素', '汤', '主食', '凉菜', '饮品', '其他']);
+
+export function updateRecipeCategory({ recipeId, category }) {
+  if (!RECIPE_CATEGORIES.has(category)) {
+    throw new AppError(400, 'INVALID_RECIPE_CATEGORY', '请选择有效的菜谱分类');
+  }
+  const changes = repo.updateRecipeCategory(recipeId, category);
+  if (changes === 0) throw new AppError(404, 'RECIPE_NOT_FOUND', '这份菜谱不存在');
+  return repo.getRecipe(recipeId);
 }
 
 export function deleteRecipe(recipeId) {

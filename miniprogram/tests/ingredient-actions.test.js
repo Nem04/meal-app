@@ -17,6 +17,7 @@ globalThis.uni = {
 
 beforeEach(() => {
   storage.clear();
+  storage.set('family-meal-token', 'token-test');
   capturedRequest = null;
   nextResponse = { items: [], failed: [] };
 });

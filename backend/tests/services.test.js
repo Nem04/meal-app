@@ -139,9 +139,8 @@ test('红线T2：fork 我家版后改副本，原版不变', () => {
 });
 
 test('基础菜谱不能直接覆盖，必须先另存为我家版', () => {
-  const { version_id } = seedRecipeWith('蒜蓉青菜', [
-    { raw_name: '青菜', quantity: 1, unit: '斤' },
-  ]);
+  const { version_id } = repo.createRecipe('蒜蓉青菜', '素', '示例', true);
+  repo.insertSpec(version_id, '青菜', '青菜', 1, '斤', '');
 
   assert.throws(
     () => svc.overwriteVersion({
@@ -158,6 +157,53 @@ test('基础菜谱不能直接覆盖，必须先另存为我家版', () => {
     specs: [{ raw_name: '青菜', quantity: 2, unit: '斤' }],
   });
   assert.equal(repo.listVersionSpecs(fork.version_id)[0].quantity, 2);
+});
+
+test('新建菜谱默认就是可直接编辑的我家版', () => {
+  const { recipe_id, version_id } = svc.createRecipeFromSpecs({
+    name: '自建菜谱',
+    category: '荤',
+    steps: '',
+    specs: [{ raw_name: '猪肉', quantity: 1, unit: '斤' }],
+  });
+
+  assert.equal(repo.getVersion(version_id).is_base, 0);
+  svc.overwriteVersion({
+    versionId: version_id,
+    steps: '切片后下锅',
+    specs: [{ raw_name: '猪肉', quantity: 2, unit: '斤' }],
+  });
+  assert.equal(svc.getRecipeDetail(recipe_id).specs[0].quantity, 2);
+});
+
+test('菜谱分类可以更新并拒绝非法分类', () => {
+  const { recipe_id } = seedRecipeWith('分类测试', [
+    { raw_name: '青菜', quantity: 1, unit: '斤' },
+  ]);
+
+  const updated = svc.updateRecipeCategory({ recipeId: recipe_id, category: '汤' });
+  assert.equal(updated.category, '汤');
+  const drink = svc.updateRecipeCategory({ recipeId: recipe_id, category: '饮品' });
+  assert.equal(drink.category, '饮品');
+  assert.throws(
+    () => svc.updateRecipeCategory({ recipeId: recipe_id, category: '甜品' }),
+    (error) => error.code === 'INVALID_RECIPE_CATEGORY',
+  );
+});
+
+test('菜谱可以按名称搜索并与分类组合筛选', () => {
+  svc.createRecipeFromSpecs({ name: '搜索番茄炒蛋', category: '素', specs: [] });
+  svc.createRecipeFromSpecs({ name: '搜索番茄汤', category: '汤', specs: [] });
+  svc.createRecipeFromSpecs({ name: '搜索清炒青菜', category: '素', specs: [] });
+
+  assert.deepEqual(
+    svc.listRecipes('', '搜索番茄').map((recipe) => recipe.name).sort(),
+    ['搜索番茄汤', '搜索番茄炒蛋'].sort(),
+  );
+  assert.deepEqual(
+    svc.listRecipes('汤', '搜索番茄').map((recipe) => recipe.name),
+    ['搜索番茄汤'],
+  );
 });
 
 test('红线T3：同饭同菜重复点菜不新增行', () => {

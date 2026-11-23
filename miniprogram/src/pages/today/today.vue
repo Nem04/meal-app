@@ -4,9 +4,7 @@
       <view class="hello">
         {{ greetingLine }}
         <text class="role-chip">{{ member.role === 'chef' ? '主厨' : '家人' }}</text>
-        <text class="role-action" @tap="goRole">
-          {{ member.role === 'chef' ? '改为家人' : '升级为主厨' }}
-        </text>
+        <text class="role-action" @tap="goRole">更改身份</text>
       </view>
 
       <!-- 进行中的饭 -->

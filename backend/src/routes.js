@@ -209,11 +209,18 @@ function extractVersion(seg) {
 async function handleRecipes(method, seg, req, res, q) {
   const id = seg[1];
 
-  if (!id && method === 'GET') return ok(res, svc.listRecipes(q.get('category') || ''));
+  if (!id && method === 'GET') {
+    return ok(res, svc.listRecipes(q.get('category') || '', q.get('q') || ''));
+  }
   if (!id && method === 'POST') {
     const b = await readBody(req);
     guardChef(req);
     return created(res, svc.createRecipeFromSpecs(b));
+  }
+  if (id && seg[2] === 'category' && method === 'PATCH') {
+    const b = await readBody(req);
+    guardChef(req);
+    return ok(res, svc.updateRecipeCategory({ recipeId: id, category: b.category }));
   }
   if (id === 'x' && seg[2] === 'versions' && seg[3] && seg[4] === 'fork' && method === 'POST') {
     guardChef(req);

@@ -13,9 +13,10 @@
       <view v-else class="muted">暂未填写详细步骤</view>
     </view>
 
-    <view v-if="isChef" class="btn-primary" @tap="fork">另存为我家版 ✨</view>
+    <view v-if="canFork" class="btn-primary" @tap="fork">另存为我家版 ✨</view>
     <view v-if="canEdit" class="btn-primary" @tap="editIngredients">编辑我家版</view>
     <view v-if="canEdit" class="btn-primary" @tap="editSteps">编辑详细步骤</view>
+    <view v-if="isChef" class="btn-primary" @tap="editCategory">修改分类</view>
     <view v-if="isChef" class="btn-primary btn-danger" @tap="del">删除这份菜谱</view>
   </view>
 </template>
@@ -23,13 +24,14 @@
 <script>
 import { request, toast, getMember } from '../../utils/index.js';
 import { parseIngredientLines } from '../../utils/ingredient-actions.js';
-import { recipeVersionPayload } from '../../utils/recipe-actions.js';
+import { pickRecipeCategory, recipeVersionPayload } from '../../utils/recipe-actions.js';
 
 export default {
   data() { return { id: '', recipe: {}, current: null, specs: [], member: null }; },
   computed: {
     isChef() { return this.member && this.member.role === 'chef'; },
     canEdit() { return this.isChef && this.current && !this.current.is_base; },
+    canFork() { return this.isChef && this.current && this.current.is_base; },
   },
   onLoad(options) { this.id = options.id || ''; },
   onShow() { this.member = getMember(); this.load(); },
@@ -95,6 +97,17 @@ export default {
           }
         },
       });
+    },
+    async editCategory() {
+      const category = await pickRecipeCategory();
+      if (!category || category === this.recipe.category) return;
+      try {
+        await request(`/recipes/${this.id}/category`, 'PATCH', { category });
+        toast('菜谱分类已更新 ✅');
+        this.load();
+      } catch (error) {
+        toast(error.message);
+      }
     },
     del() {
       uni.showModal({

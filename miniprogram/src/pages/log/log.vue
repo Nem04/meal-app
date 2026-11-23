@@ -69,6 +69,48 @@
         </view>
       </view>
     </view>
+
+    <view v-if="dateDetailVisible" class="detail-mask" @tap="closeDateDetail">
+      <view class="detail-sheet date-detail-sheet" @tap.stop>
+        <view class="detail-head">
+          <view>
+            <view class="detail-title">{{ dateDetailDate }} 吃了什么</view>
+            <view class="muted">共 {{ dateDetails.length }} 顿</view>
+          </view>
+          <view class="detail-close" @tap="closeDateDetail">×</view>
+        </view>
+        <scroll-view scroll-y class="date-detail-list">
+          <view v-for="entry in dateDetails" :key="entry.meal.id" class="date-meal-block">
+            <view class="date-meal-title">
+              {{ entry.meal.title }}
+              <text class="muted">{{ entry.meal.meal_date }}</text>
+            </view>
+            <view v-if="entry.meal.log && entry.meal.log.sentence" class="detail-note">
+              “{{ entry.meal.log.sentence }}”
+            </view>
+            <view v-for="dish in entry.dishes" :key="dish.id" class="dish-row">
+              <view style="font-weight:600">{{ dish.recipe_name }}</view>
+              <view class="muted">
+                {{ dish.submitter ? dish.submitter + ' 点的' : '已点' }}
+                <text v-if="dish.quantity > 1"> · {{ dish.quantity }} 份</text>
+              </view>
+              <view v-if="dish.note" class="muted">备注：{{ dish.note }}</view>
+            </view>
+            <view v-if="!entry.dishes.length" class="muted detail-empty">这顿饭没有菜品记录</view>
+            <view v-if="entry.photos.length" class="photo-grid date-photo-grid">
+              <image
+                v-for="(photo, index) in entry.photos"
+                :key="photo.id"
+                :src="photo.url"
+                mode="aspectFill"
+                class="photo-thumb"
+                @tap="previewDatePhoto(entry, index)"
+              />
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -76,6 +118,7 @@
 import { request, toast, getMember } from '../../utils/index.js';
 import { deleteMeal, getMealDetail } from '../../utils/meal-actions.js';
 import { listMealPhotos } from '../../utils/photo-actions.js';
+import { mealsForDate } from '../../utils/log-actions.js';
 
 export default {
   data() {
@@ -84,6 +127,7 @@ export default {
       year: now.getFullYear(), month: now.getMonth() + 1,
       days: [], cells: [], dows: ['日','一','二','三','四','五','六'], member: getMember(),
       detailVisible: false, detailMeal: {}, detailDishes: [], detailPhotos: [],
+      dateDetailVisible: false, dateDetailDate: '', dateDetails: [],
     };
   },
   computed: {
@@ -124,7 +168,39 @@ export default {
       this.year = y; this.month = m;
       this.load();
     },
-    openDay(ds) { toast(ds); },
+    async openDay(ds) {
+      const meals = mealsForDate(this.days, ds);
+      if (!meals.length) return;
+      try {
+        const dateDetails = await Promise.all(meals.map(async (meal) => {
+          const [detail, photos] = await Promise.all([
+            getMealDetail(meal.id),
+            listMealPhotos(meal.id),
+          ]);
+          return {
+            meal: detail,
+            dishes: detail.items || [],
+            photos,
+          };
+        }));
+        this.dateDetailDate = ds;
+        this.dateDetails = dateDetails;
+        this.dateDetailVisible = true;
+      } catch (error) {
+        toast(error.message);
+      }
+    },
+    closeDateDetail() {
+      this.dateDetailVisible = false;
+      this.dateDetailDate = '';
+      this.dateDetails = [];
+    },
+    previewDatePhoto(entry, index) {
+      uni.previewImage({
+        urls: entry.photos.map((photo) => photo.url),
+        current: entry.photos[index].url,
+      });
+    },
     async openDetail(meal) {
       try {
         const [detail, photos] = await Promise.all([
@@ -203,4 +279,10 @@ export default {
 .detail-empty { text-align:center; padding:36rpx 0; }
 .photo-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:10rpx; margin-bottom:20rpx; }
 .photo-thumb { width:100%; height:180rpx; border-radius:14rpx; background:#EFE7DC; }
+.date-detail-sheet { max-height:82vh; }
+.date-detail-list { max-height:65vh; }
+.date-meal-block { padding:18rpx 0 24rpx; border-bottom:1rpx solid #EFE7DC; }
+.date-meal-block:last-child { border-bottom:0; }
+.date-meal-title { display:flex; align-items:baseline; justify-content:space-between; gap:16rpx; font-size:30rpx; font-weight:700; }
+.date-photo-grid { margin-top:16rpx; }
 </style>

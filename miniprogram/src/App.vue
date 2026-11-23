@@ -1,13 +1,15 @@
 <script>
+import { bootstrapAuth } from './utils/auth.js';
+
 export default {
   onLaunch: function () {
-    console.log('App Launch')
-  },
-  onShow: function () {
-    console.log('App Show')
-  },
-  onHide: function () {
-    console.log('App Hide')
+    setTimeout(() => {
+      bootstrapAuth().catch((error) => {
+        if (error.code !== 'BIND_REQUIRED') {
+          console.error('微信登录初始化失败', error);
+        }
+      });
+    }, 0);
   },
 }
 </script>

@@ -5,6 +5,8 @@ const storage = new Map();
 let requestResponses = [];
 let loginCalls = 0;
 let reLaunchCalls = 0;
+let reLaunchUrls = [];
+let requestCalls = [];
 
 globalThis.uni = {
   getSystemInfoSync: () => ({ platform: 'devtools' }),
@@ -15,8 +17,12 @@ globalThis.uni = {
     loginCalls += 1;
     success({ code: `code-${loginCalls}` });
   },
-  reLaunch: () => { reLaunchCalls += 1; },
-  request: ({ success }) => {
+  reLaunch: ({ url }) => {
+    reLaunchCalls += 1;
+    reLaunchUrls.push(url);
+  },
+  request: ({ url, header, data, success }) => {
+    requestCalls.push({ url, header, data });
     success(requestResponses.shift());
   },
   showToast: () => {},
@@ -27,9 +33,12 @@ beforeEach(() => {
   requestResponses = [];
   loginCalls = 0;
   reLaunchCalls = 0;
+  reLaunchUrls = [];
+  requestCalls = [];
 });
 
 const auth = await import('../src/utils/auth.js');
+const api = await import('../src/utils/index.js');
 
 test('已绑定微信登录保存 token 和成员', async () => {
   requestResponses.push({
@@ -76,6 +85,133 @@ test('已有 token 时 ensureLogin 不重复请求微信登录', async () => {
   const member = await auth.ensureLogin();
   assert.equal(member.id, 'member-family');
   assert.equal(loginCalls, 0);
+});
+
+test('并发启动登录时只请求一次微信登录', async () => {
+  requestResponses.push({
+    statusCode: 200,
+    data: {
+      ok: true,
+      data: {
+        status: 'bound',
+        token: 'token-concurrent',
+        member: {
+          id: 'member-chef',
+          name: '爸爸',
+          role: 'chef',
+          color: '#D96A3B',
+        },
+      },
+    },
+  });
+
+  const [first, second] = await Promise.all([
+    auth.bootstrapAuth(),
+    auth.bootstrapAuth(),
+  ]);
+
+  assert.equal(loginCalls, 1);
+  assert.equal(first.id, 'member-chef');
+  assert.equal(second.id, 'member-chef');
+});
+
+test('无 token 时先完成微信登录再请求业务接口', async () => {
+  requestResponses.push(
+    {
+      statusCode: 200,
+      data: {
+        ok: true,
+        data: {
+          status: 'bound',
+          token: 'token-before-request',
+          member: {
+            id: 'member-family',
+            name: '妈妈',
+            role: 'member',
+            color: '#5B8C5A',
+          },
+        },
+      },
+    },
+    {
+      statusCode: 200,
+      data: { ok: true, data: [{ id: 'meal-1' }] },
+    },
+  );
+
+  const meals = await api.request('/meals');
+
+  assert.equal(loginCalls, 1);
+  assert.deepEqual(meals, [{ id: 'meal-1' }]);
+  assert.equal(requestCalls.length, 2);
+  assert.equal(requestCalls[1].header.Authorization, 'Bearer token-before-request');
+});
+
+test('主动退出会注销会话并阻止自动登录', async () => {
+  auth.setAuthForTest('token-switch', {
+    id: 'member-switch',
+    name: '爸爸',
+    role: 'chef',
+    color: '#D96A3B',
+  });
+  requestResponses.push({
+    statusCode: 200,
+    data: { ok: true, data: { loggedOut: true } },
+  });
+
+  await auth.switchWechatAccount();
+
+  assert.equal(loginCalls, 0);
+  assert.equal(auth.getTokenValue(), '');
+  assert.equal(auth.getMember(), null);
+  assert.equal(storage.get('family-meal-signed-out'), '1');
+  assert.match(requestCalls[0].url, /\/api\/auth\/logout$/);
+  assert.equal(requestCalls[0].header.Authorization, 'Bearer token-switch');
+
+  await assert.rejects(
+    () => auth.bootstrapAuth(),
+    (error) => error.code === 'BIND_REQUIRED',
+  );
+  assert.equal(loginCalls, 0);
+  assert.equal(reLaunchUrls.at(-1), '/pages/switch-wechat/switch-wechat');
+});
+
+test('清除登录后可以调用微信退出小程序接口', () => {
+  let exitCalls = 0;
+  globalThis.wx = {
+    exitMiniProgram() { exitCalls += 1; },
+  };
+
+  assert.equal(auth.exitMiniProgram(), true);
+  assert.equal(exitCalls, 1);
+  delete globalThis.wx;
+});
+
+test('主动退出后可以使用当前微信重新登录', async () => {
+  storage.set('family-meal-signed-out', '1');
+  requestResponses.push({
+    statusCode: 200,
+    data: {
+      ok: true,
+      data: {
+        status: 'bound',
+        token: 'token-relogin',
+        member: {
+          id: 'member-relogin',
+          name: '爸爸',
+          role: 'chef',
+          color: '#D96A3B',
+        },
+      },
+    },
+  });
+
+  const member = await auth.bootstrapAuth({ force: true });
+
+  assert.equal(member.id, 'member-relogin');
+  assert.equal(auth.getTokenValue(), 'token-relogin');
+  assert.equal(storage.has('family-meal-signed-out'), false);
+  assert.equal(loginCalls, 1);
 });
 
 test('调整角色后更新本地成员缓存并保留 token', async () => {
@@ -139,6 +275,7 @@ test('刷新当前成员可以同步其他设备上的角色变化', async () =>
 });
 
 test('正确绑定后保存成员并返回成员信息', async () => {
+  storage.set('family-meal-signed-out', '1');
   let requestBody;
   globalThis.uni.request = ({ data, success }) => {
     requestBody = data;
@@ -167,4 +304,5 @@ test('正确绑定后保存成员并返回成员信息', async () => {
   assert.equal(requestBody.kind, 'family');
   assert.equal(member.name, '妈妈');
   assert.equal(auth.getTokenValue(), 'token-family');
+  assert.equal(storage.has('family-meal-signed-out'), false);
 });

@@ -704,3 +704,38 @@ test('库存接口契约：批量录入、改库存和删除', async () => {
   assert.equal(deleteResp.status, 200);
   assert.equal(repo.listInventory().some((item) => item.id === celery.id), false);
 });
+
+test('家人不能更新菜谱分类，主厨可以', async () => {
+  setName('member-chef', '分类主厨');
+  setName('member-family', '分类家人');
+  const chefToken = mintSession('member-chef');
+  const familyToken = mintSession('member-family');
+  const chefHeaders = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${chefToken}`,
+  };
+  const createResp = await fetch(`${baseUrl}/recipes`, {
+    method: 'POST',
+    headers: chefHeaders,
+    body: JSON.stringify({ name: '分类权限菜谱', category: '其他', specs: [] }),
+  });
+  const recipe = (await createResp.json()).data;
+
+  const denied = await fetch(`${baseUrl}/recipes/${recipe.recipe_id}/category`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${familyToken}`,
+    },
+    body: JSON.stringify({ category: '汤' }),
+  });
+  assert.equal(denied.status, 403);
+
+  const updated = await fetch(`${baseUrl}/recipes/${recipe.recipe_id}/category`, {
+    method: 'PATCH',
+    headers: chefHeaders,
+    body: JSON.stringify({ category: '汤' }),
+  });
+  assert.equal(updated.status, 200);
+  assert.equal((await updated.json()).data.category, '汤');
+});

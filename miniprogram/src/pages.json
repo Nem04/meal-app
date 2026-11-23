@@ -1,6 +1,18 @@
 {
   "pages": [
     {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "家庭点菜"
+      }
+    },
+    {
+      "path": "pages/switch-wechat/switch-wechat",
+      "style": {
+        "navigationBarTitleText": "重新登录"
+      }
+    },
+    {
       "path": "pages/today/today",
       "style": {
         "navigationBarTitleText": "今天吃啥"

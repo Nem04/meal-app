@@ -15,20 +15,24 @@ export function newId() {
 }
 
 // ---------- recipe ----------
-export function listRecipes(category = '') {
+export function listRecipes(category = '', search = '') {
   const d = db();
+  const conditions = [];
+  const params = [];
   if (category && category !== '全部') {
-    return d.prepare(
-      'SELECT r.id, r.name, r.category, r.source, r.current_version_id, ' +
-      '(SELECT COUNT(*) FROM ingredient_spec s WHERE s.version_id = r.current_version_id) AS ingredient_count ' +
-      'FROM recipe r WHERE r.category = ? ORDER BY r.updated_at DESC'
-    ).all(category);
+    conditions.push('r.category = ?');
+    params.push(category);
   }
+  if (search && String(search).trim()) {
+    conditions.push('r.name LIKE ?');
+    params.push(`%${String(search).trim()}%`);
+  }
+  const where = conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '';
   return d.prepare(
     'SELECT r.id, r.name, r.category, r.source, r.current_version_id, ' +
     '(SELECT COUNT(*) FROM ingredient_spec s WHERE s.version_id = r.current_version_id) AS ingredient_count ' +
-    'FROM recipe r ORDER BY r.updated_at DESC'
-  ).all();
+    `FROM recipe r${where} ORDER BY r.updated_at DESC`
+  ).all(...params);
 }
 
 export function getRecipe(id) {
@@ -48,7 +52,7 @@ export function deleteRecipe(id) {
   return r.changes;
 }
 
-export function createRecipe(name, category, source) {
+export function createRecipe(name, category, source, isBase = true) {
   const d = db();
   const t = new Date().toISOString();
   const id = newId();
@@ -58,8 +62,15 @@ export function createRecipe(name, category, source) {
   ).run(id, name, category, source, vid, t, t);
   d.prepare(
     'INSERT INTO recipe_version(id,recipe_id,fork_of_version_id,title,steps,is_base,created_at) VALUES(?,?,NULL,?,?,?,?)'
-  ).run(vid, id, '基础版', '', 1, t);
+  ).run(vid, id, isBase ? '基础版' : '我家版', '', isBase ? 1 : 0, t);
   return { recipe_id: id, version_id: vid };
+}
+
+export function updateRecipeCategory(recipeId, category) {
+  const t = new Date().toISOString();
+  return db().prepare(
+    'UPDATE recipe SET category = ?, updated_at = ? WHERE id = ?'
+  ).run(category, t, recipeId).changes;
 }
 
 export function getVersion(id) {

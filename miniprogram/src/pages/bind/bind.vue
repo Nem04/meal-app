@@ -13,12 +13,15 @@
     <view class="tip">
       主厨码和家人码都可以供多个微信使用；请只发给家庭成员。
     </view>
+    <view class="tip">
+      首次使用当前微信时需要完成一次成员绑定，之后会自动登录。
+    </view>
     <button class="primary" :loading="loading" @tap="submit">绑定并进入</button>
   </view>
 </template>
 
 <script>
-import { bindWechatMember } from '../../utils/auth.js';
+import { bindWechatMember, hasExplicitSignOut } from '../../utils/auth.js';
 import { toast } from '../../utils/index.js';
 
 export default {
@@ -41,6 +44,10 @@ export default {
         uni.switchTab({ url: '/pages/today/today' });
       } catch (error) {
         if (error.code === 'OPENID_ALREADY_BOUND') {
+          if (hasExplicitSignOut()) {
+            toast('当前微信已经绑定，请返回登录页重新登录');
+            return;
+          }
           uni.switchTab({ url: '/pages/today/today' });
           return;
         }

@@ -26,11 +26,19 @@
       主厨验证码会授予主厨权限；如果这是最后一名主厨，不能切换为家人。
     </view>
     <button class="primary" :loading="loading" @tap="submit">确认切换</button>
+    <view class="switch-account" @tap="switchWechat">退出登录</view>
+    <view class="tip switch-tip">
+      仅退出本小程序的登录状态，不会删除历史点菜、日志或成员数据。退出后仍可使用当前微信重新登录。
+    </view>
   </view>
 </template>
 
 <script>
-import { changeRole, getMember } from '../../utils/auth.js';
+import {
+  changeRole,
+  getMember,
+  switchWechatAccount,
+} from '../../utils/auth.js';
 import { toast } from '../../utils/index.js';
 
 export default {
@@ -71,6 +79,20 @@ export default {
         this.loading = false;
       }
     },
+    async switchWechat() {
+      const result = await new Promise((resolve) => {
+        uni.showModal({
+          title: '退出登录',
+          content: '将清除本小程序登录状态并返回登录页，不会删除历史数据。确定继续吗？',
+          confirmText: '退出',
+          success: resolve,
+          fail: () => resolve({ confirm: false }),
+        });
+      });
+      if (!result.confirm) return;
+      await switchWechatAccount();
+      uni.reLaunch({ url: '/pages/switch-wechat/switch-wechat' });
+    },
   },
 };
 </script>
@@ -99,4 +121,15 @@ export default {
 .input { display: block; width: 100%; padding: 26rpx 28rpx; border-radius: 18rpx; background: #FFFFFF; }
 .tip { color: #8A8077; font-size: 24rpx; line-height: 1.6; margin: 16rpx 0 30rpx; }
 .primary { width: 100%; background: #5B8C5A; color: #FFFFFF; border-radius: 20rpx; }
+.switch-account {
+  margin-top: 44rpx;
+  padding: 24rpx;
+  border: 1rpx solid #E6B4AA;
+  border-radius: 20rpx;
+  color: #C94F3D;
+  font-size: 28rpx;
+  font-weight: 600;
+  text-align: center;
+}
+.switch-tip { margin-bottom: 0; }
 </style>

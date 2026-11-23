@@ -1,16 +1,19 @@
 import { rawRequest, ApiError } from './http.js';
 import { getToken } from './token.js';
-import { ensureLogin, getMember } from './auth.js';
+import { bootstrapAuth, getMember } from './auth.js';
 
 export { getMember, ApiError };
 
 export async function request(path, method = 'GET', body, options = {}) {
+  if (!getToken()) {
+    await bootstrapAuth();
+  }
   try {
     const response = await rawRequest(path, method, body, { token: getToken() });
     return response.data;
   } catch (error) {
     if (error.status === 401 && !options.retried) {
-      await ensureLogin(true);
+      await bootstrapAuth({ force: true });
       return request(path, method, body, { ...options, retried: true });
     }
     throw error;
