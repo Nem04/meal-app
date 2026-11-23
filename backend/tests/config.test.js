@@ -27,11 +27,19 @@ test('微信模式缺少任意必要配置时拒绝启动', () => {
   );
 });
 
-test('绑定口令至少 12 个字符', () => {
+test('绑定口令至少 8 个字符', () => {
   assert.throws(
     () => validateAuthConfig({ ...valid, chefBindCode: 'short' }),
     /CHEF_BIND_CODE/,
   );
+});
+
+test('接受家庭当前使用的主厨码和家人码', () => {
+  assert.doesNotThrow(() => validateAuthConfig({
+    ...valid,
+    chefBindCode: 'chef_2026',
+    familyInviteCode: 'family_2026',
+  }));
 });
 
 test('拒绝未替换的占位口令', () => {

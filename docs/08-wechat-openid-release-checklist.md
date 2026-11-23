@@ -16,7 +16,7 @@
 - [ ] `WX_APPID` 和小程序后台一致。
 - [ ] `WX_APPID` 和 `WX_SECRET` 不为空，且不以 `replace-with-` 开头。
 - [ ] `WX_SECRET` 只存在服务器，未进入 Git 和小程序包。
-- [ ] `CHEF_BIND_CODE` 和 `FAMILY_INVITE_CODE` 均至少 12 个字符。
+- [ ] `CHEF_BIND_CODE` 和 `FAMILY_INVITE_CODE` 均至少 8 个字符。
 - [ ] `CHEF_BIND_CODE` 和 `FAMILY_INVITE_CODE` 不为空，且不以 `replace-with-` 开头；否则后端拒绝启动。
 - [ ] 两个绑定口令已保存在密码管理器。
 

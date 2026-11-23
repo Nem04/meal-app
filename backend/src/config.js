@@ -2,6 +2,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const env = process.env;
+const MIN_BIND_CODE_LENGTH = 8;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -49,11 +50,11 @@ export function validateAuthConfig(value = config) {
   if (placeholders.length) {
     throw new Error(`检测到未替换的占位配置：${placeholders.join(', ')}`);
   }
-  if (value.chefBindCode.length < 12) {
-    throw new Error('CHEF_BIND_CODE 至少需要 12 个字符');
+  if (value.chefBindCode.length < MIN_BIND_CODE_LENGTH) {
+    throw new Error(`CHEF_BIND_CODE 至少需要 ${MIN_BIND_CODE_LENGTH} 个字符`);
   }
-  if (value.familyInviteCode.length < 12) {
-    throw new Error('FAMILY_INVITE_CODE 至少需要 12 个字符');
+  if (value.familyInviteCode.length < MIN_BIND_CODE_LENGTH) {
+    throw new Error(`FAMILY_INVITE_CODE 至少需要 ${MIN_BIND_CODE_LENGTH} 个字符`);
   }
   if (!Number.isInteger(value.sessionTtlDays) || value.sessionTtlDays <= 0) {
     throw new Error('SESSION_TTL_DAYS 必须是正整数');
