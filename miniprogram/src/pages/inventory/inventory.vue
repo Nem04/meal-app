@@ -1,6 +1,6 @@
 <template>
   <view>
-    <view class="btn-primary" @tap="bulkForm">📋 整段粘贴录入</view>
+    <view v-if="isChef" class="btn-primary" @tap="bulkForm">📋 整段粘贴录入</view>
     <view class="section-title">库存清单（{{ list.length }} 项）</view>
     <view v-for="i in list" :key="i.id" class="card row">
       <view class="emoji">🥫</view>
@@ -25,6 +25,7 @@ export default {
   methods: {
     async load() { try { this.list = await request('/inventory'); } catch (e) { toast(e.message); } },
     bulkForm() {
+      if (!this.isChef) return toast('请先点击右上角更改身份');
       uni.showModal({
         title: '整段粘贴录入', editable: true, placeholderText: '芹菜一斤，酱油一瓶、鸡蛋十个',
         success: async (res) => {

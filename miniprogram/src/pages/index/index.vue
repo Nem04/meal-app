@@ -2,37 +2,20 @@
   <view class="entry-page">
     <image class="logo" src="/static/brand/app-avatar-144.png" mode="aspectFill"></image>
     <view class="title">家庭点菜</view>
-    <view class="status">{{ statusText }}</view>
-    <button v-if="failed" class="retry" @tap="start">重新验证微信身份</button>
+    <view class="status">正在进入家庭点菜…</view>
   </view>
 </template>
 
 <script>
-import { bootstrapAuth } from '../../utils/auth.js';
+import { hasExplicitSignOut } from '../../utils/auth.js';
 
 export default {
-  data() {
-    return {
-      statusText: '正在验证微信身份…',
-      failed: false,
-    }
-  },
   onLoad() {
-    this.start();
-  },
-  methods: {
-    async start() {
-      this.failed = false;
-      this.statusText = '正在验证微信身份…';
-      try {
-        await bootstrapAuth();
-        uni.switchTab({ url: '/pages/today/today' });
-      } catch (error) {
-        if (error.code === 'BIND_REQUIRED') return;
-        this.failed = true;
-        this.statusText = error.message || '微信登录失败，请检查网络后重试';
-      }
-    },
+    if (hasExplicitSignOut()) {
+      uni.reLaunch({ url: '/pages/switch-wechat/switch-wechat' });
+      return;
+    }
+    uni.switchTab({ url: '/pages/today/today' });
   },
 }
 </script>
@@ -71,14 +54,4 @@ export default {
   text-align: center;
 }
 
-.retry {
-  margin-top: 36rpx;
-  padding: 0 36rpx;
-  border: none;
-  border-radius: 999rpx;
-  background: #5B8C5A;
-  color: #FFFFFF;
-  font-size: 28rpx;
-  line-height: 82rpx;
-}
 </style>

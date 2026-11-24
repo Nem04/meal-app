@@ -11,9 +11,11 @@
         <view class="muted">{{ r.category }} · {{ r.ingredient_count }} 种食材</view>
       </view>
       <view
+        v-if="member"
         :class="['add-btn', isOrdered(r) ? 'added' : '']"
         @tap.stop="pickDish(r)"
       >{{ isOrdered(r) ? '已点' : '+' }}</view>
+      <view v-else class="guest-order">绑定后可点</view>
     </view>
     <view v-if="!recipes.length" class="muted" style="text-align:center;margin:40rpx;">还没有菜谱，先去「菜谱」建一道吧</view>
   </view>
@@ -50,6 +52,10 @@ export default {
       return isRecipeOrdered(recipe, this.orderedRecipeIds);
     },
     async pickDish(r) {
+      if (!this.member) {
+        toast('请先点击右上角更改身份');
+        return;
+      }
       if (this.isOrdered(r)) return;
       try {
         await request(`/meals/${this.mealId}/items`, 'POST', { recipe_version_id: r.current_version_id, quantity: 1, note: '' });
@@ -86,4 +92,5 @@ export default {
 .add-btn.added { width:auto; min-width:76rpx; height:48rpx; line-height:48rpx; padding:0 16rpx; border-radius:999rpx; background:#E5DCCD; color:#8A8077; font-size:22rpx; }
 .toolbar { display:flex; align-items:center; justify-content:space-between; gap:16rpx; margin:20rpx 24rpx; }
 .finish-btn { color:#C94F3D; font-size:24rpx; font-weight:600; padding:10rpx 16rpx; border:1rpx solid #E8B7AB; border-radius:999rpx; }
+.guest-order { color:#8A8077; font-size:22rpx; white-space:nowrap; }
 </style>

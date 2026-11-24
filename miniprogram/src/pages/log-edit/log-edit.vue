@@ -88,6 +88,11 @@ export default {
   },
   onShow() {
     this.member = getMember();
+    if (!this.member) {
+      toast('请先点击右上角更改身份');
+      setTimeout(() => uni.navigateBack(), 500);
+      return;
+    }
     this.load();
   },
   methods: {

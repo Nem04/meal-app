@@ -5,6 +5,14 @@ import { config } from './config.js';
 import { AppError } from './errors.js';
 import { bearerToken } from './auth/request.js';
 import { createWechatClient } from './auth/wechat.js';
+import {
+  publicCalendarDay,
+  publicInventoryItem,
+  publicLog,
+  publicMealDetail,
+  publicMealSummary,
+  publicPrep,
+} from './publicView.js';
 
 const defaultWechatClient = createWechatClient({
   appId: config.wxAppId,
@@ -25,6 +33,17 @@ function requireIdentity(req) {
   return auth.member;
 }
 
+function optionalIdentity(req) {
+  if (req.member) return req.member;
+  if (config.authMode === 'legacy') {
+    const member = svc.identifyMemberById(req.headers['x-member-id'] || '');
+    if (member) req.member = member;
+    return member;
+  }
+  if (!req.headers.authorization) return null;
+  return requireIdentity(req);
+}
+
 function guardChef(req) {
   svc.guardChef(requireIdentity(req));
 }
@@ -43,15 +62,18 @@ export async function handle(req, res, url, deps = {}) {
       return await handleAuth(method, seg, req, res, deps.wechatClient || defaultWechatClient);
     }
     if (seg[0] === 'meals') {
-      requireIdentity(req);
+      if (method === 'GET') optionalIdentity(req);
+      else requireIdentity(req);
       return await handleMeals(method, seg, req, res, q);
     }
     if (seg[0] === 'recipes') {
-      requireIdentity(req);
+      if (method === 'GET') optionalIdentity(req);
+      else requireIdentity(req);
       return await handleRecipes(method, seg, req, res, q);
     }
     if (seg[0] === 'inventory') {
-      requireIdentity(req);
+      if (method === 'GET') optionalIdentity(req);
+      else requireIdentity(req);
       return await handleInventory(method, seg, req, res, q);
     }
     if (seg[0] === 'members') {
@@ -59,10 +81,15 @@ export async function handle(req, res, url, deps = {}) {
       return await handleMembers(method, seg, req, res, q);
     }
     if (path === '/calendar' && method === 'GET') {
-      requireIdentity(req);
+      optionalIdentity(req);
       const year = Number(q.get('year') || new Date().getFullYear());
       const month = Number(q.get('month') || new Date().getMonth() + 1);
-      return ok(res, { days: svc.calendarMonth(year, month), year, month });
+      const days = svc.calendarMonth(year, month);
+      return ok(res, {
+        days: req.member ? days : days.map(publicCalendarDay),
+        year,
+        month,
+      });
     }
     fail(res, 404, '没有这个接口');
   } catch (error) {
@@ -142,7 +169,7 @@ async function handleMeals(method, seg, req, res, q) {
   const id = seg[1];
 
   if (id && seg[2] === 'log' && seg[3] === 'photos' && !seg[4] && method === 'GET') {
-    return ok(res, { photos: svc.listMealLogPhotos(id) });
+    return ok(res, { photos: req.member ? svc.listMealLogPhotos(id) : [] });
   }
   if (id && seg[2] === 'log' && seg[3] === 'photos' && !seg[4] && method === 'POST') {
     const body = await readBody(req, 3 * 1024 * 1024);
@@ -160,15 +187,27 @@ async function handleMeals(method, seg, req, res, q) {
       member: req.member,
     }));
   }
-  if (!id && method === 'GET') return ok(res, svc.listMeals());
+  if (!id && method === 'GET') {
+    const meals = svc.listMeals();
+    return ok(res, req.member ? meals : meals.map(publicMealSummary));
+  }
   if (!id && method === 'POST') {
     const b = await readBody(req);
     guardChef(req);
     return created(res, svc.openMeal({ ...b, created_by: req.member.name }));
   }
-  if (id && seg[2] === 'prep' && method === 'GET') return ok(res, svc.listPrep(id));
-  if (id && seg[2] === 'log' && !seg[3] && method === 'GET') return ok(res, svc.getMealWithPrep(id).log);
-  if (id && !seg[2] && method === 'GET') return ok(res, svc.getMealWithPrep(id));
+  if (id && seg[2] === 'prep' && method === 'GET') {
+    const prep = svc.listPrep(id);
+    return ok(res, req.member ? prep : publicPrep(prep));
+  }
+  if (id && seg[2] === 'log' && !seg[3] && method === 'GET') {
+    const log = svc.getMealWithPrep(id).log;
+    return ok(res, req.member ? log : publicLog(log));
+  }
+  if (id && !seg[2] && method === 'GET') {
+    const meal = svc.getMealWithPrep(id);
+    return ok(res, req.member ? meal : publicMealDetail(meal));
+  }
   if (id && seg[2] === 'items' && method === 'POST') {
     const body = await readBody(req);
     return created(res, svc.addMealItem({
@@ -240,7 +279,10 @@ async function handleInventory(method, seg, req, res, q) {
   const isAction = seg[1] === 'parse' || seg[1] === 'bulk';
   const id = isAction ? undefined : seg[1];
 
-  if (!id && method === 'GET') return ok(res, svc.listInventory(q.get('q') || ''));
+  if (!id && method === 'GET') {
+    const items = svc.listInventory(q.get('q') || '');
+    return ok(res, req.member ? items : items.map(publicInventoryItem));
+  }
   if (seg[1] === 'parse' && method === 'POST') {
     const b = await readBody(req);
     return ok(res, svc.parseInventory(b.text || ''));

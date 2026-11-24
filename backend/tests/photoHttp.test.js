@@ -68,7 +68,8 @@ test('已认证成员可以列出饭局照片，初始为空', async () => {
   const meal = await createMeal('照片列表');
 
   const anon = await fetch(`${baseUrl}/meals/${meal.id}/log/photos`);
-  assert.equal(anon.status, 401);
+  assert.equal(anon.status, 200);
+  assert.deepEqual((await anon.json()).data, { photos: [] });
 
   const response = await fetch(`${baseUrl}/meals/${meal.id}/log/photos`, {
     headers: { 'x-member-id': FAMILY },

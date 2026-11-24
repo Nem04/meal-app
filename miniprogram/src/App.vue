@@ -1,17 +1,5 @@
 <script>
-import { bootstrapAuth } from './utils/auth.js';
-
-export default {
-  onLaunch: function () {
-    setTimeout(() => {
-      bootstrapAuth().catch((error) => {
-        if (error.code !== 'BIND_REQUIRED') {
-          console.error('微信登录初始化失败', error);
-        }
-      });
-    }, 0);
-  },
-}
+export default {}
 </script>
 
 <style>
