@@ -25,7 +25,7 @@
       </view>
       <view class="actions">
         <view class="small-btn" @tap.stop="openDetail(m)">详情</view>
-        <view class="small-btn" @tap.stop="leaveLog(m)">留话</view>
+        <view v-if="member" class="small-btn" @tap.stop="leaveLog(m)">留话</view>
         <view v-if="isChef" class="small-btn danger" @tap.stop="removeMeal(m)">删</view>
       </view>
     </view>

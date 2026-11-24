@@ -115,36 +115,18 @@ test('并发启动登录时只请求一次微信登录', async () => {
   assert.equal(second.id, 'member-chef');
 });
 
-test('无 token 时先完成微信登录再请求业务接口', async () => {
-  requestResponses.push(
-    {
-      statusCode: 200,
-      data: {
-        ok: true,
-        data: {
-          status: 'bound',
-          token: 'token-before-request',
-          member: {
-            id: 'member-family',
-            name: '妈妈',
-            role: 'member',
-            color: '#5B8C5A',
-          },
-        },
-      },
-    },
-    {
-      statusCode: 200,
-      data: { ok: true, data: [{ id: 'meal-1' }] },
-    },
-  );
+test('无 token 时保持游客模式且不自动微信登录', async () => {
+  requestResponses.push({
+    statusCode: 200,
+    data: { ok: true, data: [{ id: 'meal-1' }] },
+  });
 
   const meals = await api.request('/meals');
 
-  assert.equal(loginCalls, 1);
+  assert.equal(loginCalls, 0);
   assert.deepEqual(meals, [{ id: 'meal-1' }]);
-  assert.equal(requestCalls.length, 2);
-  assert.equal(requestCalls[1].header.Authorization, 'Bearer token-before-request');
+  assert.equal(requestCalls.length, 1);
+  assert.equal(requestCalls[0].header.Authorization, undefined);
 });
 
 test('主动退出会注销会话并阻止自动登录', async () => {

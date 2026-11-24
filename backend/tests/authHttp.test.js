@@ -68,10 +68,85 @@ after(async () => {
   dbm.closeDbForTest();
 });
 
-test('未登录访问业务接口返回 401 和稳定错误码', async () => {
-  const response = await fetch(`${baseUrl}/meals`);
+test('未登录访问写接口返回 401 和稳定错误码', async () => {
+  const response = await fetch(`${baseUrl}/meals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: '游客不能开饭' }),
+  });
   assert.equal(response.status, 401);
   assert.equal((await response.json()).data.code, 'UNAUTHORIZED');
+});
+
+test('游客可读取真实预览数据且敏感字段被隐藏', async () => {
+  setName('member-chef', '爸爸');
+  setName('member-family', '妈妈');
+  const chefToken = mintSession('member-chef');
+  const familyToken = mintSession('member-family');
+
+  const mealResp = await fetch(`${baseUrl}/meals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${chefToken}` },
+    body: JSON.stringify({ title: '游客预览饭局', meal_date: '2026-11-04' }),
+  });
+  const meal = (await mealResp.json()).data;
+
+  await fetch(`${baseUrl}/meals/${meal.id}/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${familyToken}` },
+    body: JSON.stringify({
+      recipe_version_id: 'recipe-seed-001-v1',
+      quantity: 1,
+      note: '',
+    }),
+  });
+  await fetch(`${baseUrl}/meals/${meal.id}/log`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${familyToken}` },
+    body: JSON.stringify({ sentence: '这是私密留言', rating: '5' }),
+  });
+  repo.insertMealLogPhoto({
+    id: 'guest-preview-photo',
+    mealId: meal.id,
+    fileName: 'private-photo.png',
+    mimeType: 'image/png',
+    sizeBytes: 10,
+    createdById: 'member-family',
+    createdByName: '妈妈',
+    createdAt: new Date().toISOString(),
+  });
+
+  const listResp = await fetch(`${baseUrl}/meals`);
+  assert.equal(listResp.status, 200);
+  const listText = await listResp.text();
+  assert.equal(listText.includes('爸爸'), false);
+
+  const detailResp = await fetch(`${baseUrl}/meals/${meal.id}`);
+  assert.equal(detailResp.status, 200);
+  const detail = await detailResp.json();
+  assert.equal(detail.data.items[0].submitter, '');
+  assert.deepEqual(detail.data.submissions, []);
+  assert.equal(detail.data.log.sentence, undefined);
+  assert.equal(JSON.stringify(detail.data).includes('妈妈'), false);
+
+  const photosResp = await fetch(`${baseUrl}/meals/${meal.id}/log/photos`);
+  assert.equal(photosResp.status, 200);
+  assert.deepEqual((await photosResp.json()).data.photos, []);
+
+  assert.equal((await fetch(`${baseUrl}/recipes`)).status, 200);
+  assert.equal((await fetch(`${baseUrl}/inventory`)).status, 200);
+
+  await fetch(`${baseUrl}/meals/${meal.id}/close`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${chefToken}` },
+  });
+  const calendarResp = await fetch(`${baseUrl}/calendar?year=2026&month=11`);
+  assert.equal(calendarResp.status, 200);
+  const calendar = await calendarResp.json();
+  const day = calendar.data.days.find((item) => item.id === meal.id);
+  assert.ok(day);
+  assert.equal(day.sentence, undefined);
+  assert.equal(day.photo_count, 0);
 });
 
 test('主厨绑定后可以访问业务接口，成员响应不泄露 openid', async () => {
@@ -192,7 +267,7 @@ test('库存变更使用会话主厨，伪造 operator 被忽略', async () => {
 });
 
 test('wechat 模式下仅 x-member-id 无法认证，伪造 x-member-id 不覆盖 Bearer', async () => {
-  const noToken = await fetch(`${baseUrl}/meals`, {
+  const noToken = await fetch(`${baseUrl}/members`, {
     headers: { 'x-member-id': 'member-chef' },
   });
   assert.equal(noToken.status, 401);
