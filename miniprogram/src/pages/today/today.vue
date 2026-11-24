@@ -2,7 +2,7 @@
   <view>
     <view class="hello">
       {{ greetingLine }}
-      <text class="role-chip" @tap="goRole">{{ member ? (member.role === 'chef' ? '主厨' : '家人') : '游客' }}</text>
+      <text class="role-chip" @tap="goRole">{{ member ? (member.role === 'chef' ? '主厨' : '家人') : '朋友' }}</text>
     </view>
     <!-- 进行中的饭 -->
     <view v-if="openMeal" class="hero">

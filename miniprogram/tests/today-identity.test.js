@@ -12,7 +12,8 @@ test('身份标签本身就是更改身份入口', () => {
     todayPage,
     /<text class="role-chip" @tap="goRole">/,
   );
-  assert.match(todayPage, /:\s*'游客'/);
+  assert.match(todayPage, /:\s*'朋友'/);
+  assert.doesNotMatch(todayPage, /'游客'/);
 });
 
 test('身份标签不再显示独立的更改身份按钮', () => {
