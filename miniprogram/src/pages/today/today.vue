@@ -2,8 +2,7 @@
   <view>
     <view class="hello">
       {{ greetingLine }}
-      <text class="role-chip">{{ member ? (member.role === 'chef' ? '主厨' : '家人') : '游客' }}</text>
-      <text class="role-action" @tap="goRole">更改身份</text>
+      <text class="role-chip" @tap="goRole">{{ member ? (member.role === 'chef' ? '主厨' : '家人') : '游客' }}</text>
     </view>
     <!-- 进行中的饭 -->
     <view v-if="openMeal" class="hero">
@@ -175,9 +174,8 @@ export default {
 .hello { margin: 20rpx 24rpx 0; font-size: 26rpx; color: #8A8077; display: flex; align-items: center; gap: 12rpx; }
 .role-chip {
   background: #EAF2E7; color: #4F7A4E; font-size: 22rpx;
-  padding: 2rpx 16rpx; border-radius: 999rpx;
+  padding: 6rpx 18rpx; border-radius: 999rpx; margin-left: auto;
 }
-.role-action { color: #D96A3B; font-size: 24rpx; margin-left: auto; padding: 4rpx 10rpx; }
 .hero {
   background: linear-gradient(135deg, #5B8C5A, #72A06D);
   color: #fff; border-radius: 26rpx; padding: 32rpx; margin: 20rpx 24rpx;
