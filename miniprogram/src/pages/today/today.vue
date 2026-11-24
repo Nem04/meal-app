@@ -174,7 +174,7 @@ export default {
 .hello { margin: 20rpx 24rpx 0; font-size: 26rpx; color: #8A8077; display: flex; align-items: center; gap: 12rpx; }
 .role-chip {
   background: #EAF2E7; color: #4F7A4E; font-size: 22rpx;
-  padding: 6rpx 18rpx; border-radius: 999rpx; margin-left: auto;
+  padding: 6rpx 18rpx; border-radius: 999rpx;
 }
 .hero {
   background: linear-gradient(135deg, #5B8C5A, #72A06D);
