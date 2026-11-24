@@ -5,10 +5,6 @@
       <text class="role-chip">{{ member ? (member.role === 'chef' ? '主厨' : '家人') : '游客' }}</text>
       <text class="role-action" @tap="goRole">更改身份</text>
     </view>
-    <view v-if="!member" class="guest-tip">
-      游客浏览模式：可以查看菜品和备菜信息，绑定身份后才能开饭、点菜和编辑。
-    </view>
-
     <!-- 进行中的饭 -->
     <view v-if="openMeal" class="hero">
       <view class="hero-tag">🔥 进行中</view>
@@ -16,7 +12,6 @@
       <view class="hero-sub">{{ openMeal.meal_date }} · {{ openMeal.item_count }} 道菜</view>
       <view class="hero-actions">
         <view v-if="member" class="hero-btn" @tap="goPoint(openMeal.id)">去点菜</view>
-        <view v-else class="hero-btn guest-disabled">绑定后可点菜</view>
         <view class="hero-btn ghost" @tap="goPrep(openMeal.id)">看备菜清单</view>
       </view>
       <view v-if="isChef" class="end-meal" @tap="finishMeal(openMeal)">结束点菜</view>
@@ -27,7 +22,7 @@
       <view class="hero-sub">开一顿饭，让家人一起来点。</view>
       <view class="hero-actions">
         <view class="hero-btn" @tap="openMealForm" v-if="isChef">开一顿饭</view>
-        <view class="muted" v-else>{{ member ? '等主厨开饭吧' : '绑定身份后可以开饭或点菜' }}</view>
+        <view v-else-if="member" class="muted">等主厨开饭吧</view>
       </view>
     </view>
 
@@ -178,7 +173,6 @@ export default {
 
 <style>
 .hello { margin: 20rpx 24rpx 0; font-size: 26rpx; color: #8A8077; display: flex; align-items: center; gap: 12rpx; }
-.guest-tip { margin: 16rpx 24rpx 0; padding: 18rpx 22rpx; background: #FFF3D9; color: #8A6540; border-radius: 16rpx; font-size: 24rpx; line-height: 1.6; }
 .role-chip {
   background: #EAF2E7; color: #4F7A4E; font-size: 22rpx;
   padding: 2rpx 16rpx; border-radius: 999rpx;
@@ -194,7 +188,6 @@ export default {
 .hero-actions { display: flex; gap: 20rpx; margin-top: 24rpx; }
 .hero-btn { flex:1; text-align:center; border-radius: 20rpx; padding: 20rpx 0; font-size: 28rpx; font-weight:600; background:#fff; color:#4F7A4E; }
 .hero-btn.ghost { background: rgba(255,255,255,.18); color:#fff; }
-.hero-btn.guest-disabled { background: rgba(255,255,255,.42); color:#4F7A4E; }
 .end-meal { margin-top:18rpx; text-align:center; font-size:24rpx; color:#fff; opacity:.9; padding:10rpx 0; }
 .row { display:flex; align-items:center; gap:20rpx; }
 </style>
